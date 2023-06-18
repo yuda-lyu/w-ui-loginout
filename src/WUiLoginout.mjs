@@ -69,13 +69,6 @@ function WUiLoginout(site, opt = {}) {
     //params
     let params = get(opt, 'params', {})
     // console.log('params', params)
-    // => {
-    //     logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
-    //     logOut: '{base}sso/api/logout?token={token}',
-    //     checkToken: '{base}sso/api/checkToken?token={token}',
-    //     goSSO: '{base}sso/?token={token}',
-    //     goPerm: '{baseNoPort}perm/?token={token}',
-    // }
 
     //keyGlobal
     let keyGlobal = get(opt, 'keyGlobal', '')
@@ -174,12 +167,19 @@ function WUiLoginout(site, opt = {}) {
     }
 
 
+    //getValue
+    let getValue = (key) => {
+        let value = get(window, `${keyGlobal}.${key}`, '')
+        return value
+    }
+
+
     //getUrl
     let getUrl = (key) => {
         let token = getToken()
         let base = get(window, `${keyGlobal}.base`, '')
         let baseNoPort = get(window, `${keyGlobal}.baseNoPort`, '')
-        let url = get(window, `${keyGlobal}.${key}`, '')
+        let url = getValue(key)
         url = url.replace('{token}', token)
         url = url.replace('{base}', base)
         url = url.replace('{baseNoPort}', baseNoPort)
@@ -192,7 +192,7 @@ function WUiLoginout(site, opt = {}) {
         let errTemp = null
 
         //urlBase
-        let urlBase = getUrl('base')
+        let urlBase = getValue('base')
         // console.log('getApi urlBase', urlBase)
 
         //url
@@ -239,7 +239,7 @@ function WUiLoginout(site, opt = {}) {
         let loginSuccess = get(opt, 'loginSuccess')
 
         //site
-        let site = getUrl('site')
+        let site = getValue('site')
         // console.log('site', site)
 
         async function core() {
@@ -410,7 +410,7 @@ function WUiLoginout(site, opt = {}) {
         let procLogout = get(opt, 'procLogout')
 
         //site
-        let site = getUrl('site')
+        let site = getValue('site')
         // console.log('site', site)
 
         let locking = false
@@ -510,7 +510,7 @@ function WUiLoginout(site, opt = {}) {
         let logoutSuccess = get(opt, 'logoutSuccess')
 
         //site
-        let site = getUrl('site')
+        let site = getValue('site')
         // console.log('site', site)
 
         async function core() {
@@ -637,6 +637,7 @@ function WUiLoginout(site, opt = {}) {
         parseUrl,
         getTokenFromUrl,
         getToken,
+        getValue,
         getUrl,
         getApi,
         login,

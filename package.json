@@ -1,6 +1,6 @@
 {
   "name": "w-ui-loginout",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist/w-ui-loginout.umd.js",
   "dependencies": {
     "lodash": "^4.17.21",
