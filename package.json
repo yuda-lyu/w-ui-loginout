@@ -1,0 +1,28 @@
+{
+  "name": "w-ui-loginout",
+  "version": "1.0.0",
+  "main": "dist/w-ui-loginout.umd.js",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "wsemi": "^1.7.3"
+  },
+  "devDependencies": {
+    "w-package-tools": "^1.0.69"
+  },
+  "scripts": {
+    "test": "mocha --parallel --timeout 60000 --experimental-modules --es-module-specifier-resolution=node",
+    "deploy": "gh-pages -d docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuda-lyu/w-ui-loginout.git"
+  },
+  "keywords": [
+    "package",
+    "tool",
+    "loginout",
+    "browser"
+  ],
+  "author": "yuda-lyu(semisphere)",
+  "license": "MIT"
+}
