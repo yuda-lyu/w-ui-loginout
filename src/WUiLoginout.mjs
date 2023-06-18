@@ -24,14 +24,14 @@ import delay from 'wsemi/src/delay.mjs'
  * @returns {Object} 回傳輔助函數物件，可使用'parseUrl'、'getTokenFromUrl'、'login'、'detect'、'logout'
  * @example
  * import wui from 'w-ui-loginout/src/WUiLoginout.mjs'
- * 
+ *
  * function loginSuccess(data) {
  *     console.log('login success', data.user)
  *     // vo.$ui.updateConnState('已連線')
  *     // vo.$ui.updateUserToken(data.token)
  *     // vo.$ui.updateUserSelf(data.user)
  * }
- * 
+ *
  * function loginError(data) {
  *     console.log('login error', data)
  *     // vo.$ui.updateConnState(data.text)
@@ -40,7 +40,7 @@ import delay from 'wsemi/src/delay.mjs'
  *     // vo.ready = false
  *     // vo.msg = data.msg
  * }
- * 
+ *
  * //login
  * console.log('login...')
  * let ll = wui('wperm', {
@@ -57,7 +57,7 @@ import delay from 'wsemi/src/delay.mjs'
  *     loginError,
  * })
  * // vo.ll = ll
- * 
+ *
  */
 function WUiLoginout(site, opt = {}) {
 
@@ -67,7 +67,7 @@ function WUiLoginout(site, opt = {}) {
     }
 
     //params
-    let params = get(opt, 'params',{})
+    let params = get(opt, 'params', {})
     // console.log('params', params)
     // => {
     //     logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
@@ -106,7 +106,7 @@ function WUiLoginout(site, opt = {}) {
     if (!isestr(apiNameForVerify)) {
         apiNameForVerify = 'getUserByToken'
     }
-    
+
     //urlBase
     let urlBase = window.location.origin + window.location.pathname
 
