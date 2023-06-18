@@ -5,17 +5,17 @@ let fdSrc = './src'
 let fdTar = './dist'
 
 rollupFiles({ //rollupFiles預設會clean folder
-    fns: 'WUiDwload.mjs',
+    fns: 'WUiLoginout.mjs',
     fdSrc,
     fdTar,
     nameDistType: 'kebabCase',
     // bNodePolyfill: true,
     // bMinify: false,
     globals: {
-        'xlsx': 'XLSX',
+        // 'xlsx': 'XLSX',
     },
     external: [
-        'xlsx',
+        // 'xlsx',
     ],
 })
     .catch((err) => {

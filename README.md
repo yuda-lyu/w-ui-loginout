@@ -9,7 +9,7 @@ A tool for login and logout in browser.
 [![jsdelivr download](https://img.shields.io/jsdelivr/npm/hm/w-ui-loginout.svg)](https://www.jsdelivr.com/package/npm/w-ui-loginout)
 
 ## Documentation
-To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-ui-loginout/w-ui-loginout.html).
+To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-ui-loginout/global.html).
 
 ## Installation
 ### Using npm(ES6 module):
@@ -23,5 +23,5 @@ npm i w-ui-loginout
 
 Add script for w-ui-loginout.
 ```alias
-<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.0/dist/w-ui-loginout.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.1/dist/w-ui-loginout.umd.js"></script>
 ```
