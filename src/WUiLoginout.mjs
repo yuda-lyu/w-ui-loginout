@@ -636,6 +636,9 @@ function WUiLoginout(site, opt = {}) {
     let r = {
         parseUrl,
         getTokenFromUrl,
+        getToken,
+        getUrl,
+        getApi,
         login,
         detect,
         logout
