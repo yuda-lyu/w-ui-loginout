@@ -100,19 +100,26 @@ function WUiLoginout(site, opt = {}) {
         apiNameForVerify = 'getUserByToken'
     }
 
+    //urlOrigin
+    let urlOrigin = window.location.origin
+
     //urlBase
     let urlBase = window.location.origin + window.location.pathname
 
-    //urlBaseNoPort, 取代開發階段perm用IIS反向代理架設, 網址無port得取代掉
+    //urlOriginNoPort, urlBaseNoPort, 取代開發階段perm用IIS反向代理架設, 網址無port得取代掉
+    let urlOriginNoPort = urlOrigin
     let urlBaseNoPort = urlBase
     if (isestr(window.location.port)) {
         let p = `:${window.location.port}`
+        urlOriginNoPort = urlOriginNoPort.replace(p, '')
         urlBaseNoPort = urlBaseNoPort.replace(p, '')
     }
 
     //save, 儲存至window供全域使用
     window[keyGlobal] = {
         ...params,
+        origin: urlOrigin,
+        originNoPort: urlOriginNoPort,
         base: urlBase,
         baseNoPort: urlBaseNoPort,
     }
@@ -177,10 +184,14 @@ function WUiLoginout(site, opt = {}) {
     //getUrl
     let getUrl = (key) => {
         let token = getToken()
+        let origin = get(window, `${keyGlobal}.origin`, '')
+        let originNoPort = get(window, `${keyGlobal}.originNoPort`, '')
         let base = get(window, `${keyGlobal}.base`, '')
         let baseNoPort = get(window, `${keyGlobal}.baseNoPort`, '')
         let url = getValue(key)
         url = url.replace('{token}', token)
+        url = url.replace('{origin}', origin)
+        url = url.replace('{originNoPort}', originNoPort)
         url = url.replace('{base}', base)
         url = url.replace('{baseNoPort}', baseNoPort)
         return url
