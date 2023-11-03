@@ -118,6 +118,7 @@ function WUiLoginout(site, opt = {}) {
     //save, 儲存至window供全域使用
     window[keyGlobal] = {
         ...params,
+        site,
         origin: urlOrigin,
         originNoPort: urlOriginNoPort,
         base: urlBase,
@@ -258,6 +259,12 @@ function WUiLoginout(site, opt = {}) {
 
             //delay, 等待連線動畫展示
             await delay(timeWaitAnimation)
+
+            //check
+            if (!isestr(site)) {
+                console.log('site', site)
+                throw new Error(`invalid site`)
+            }
 
             //token
             let token = ''
