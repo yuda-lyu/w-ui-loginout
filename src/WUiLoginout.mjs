@@ -537,6 +537,15 @@ function WUiLoginout(site, opt = {}) {
             //token
             let token = getToken()
 
+            //check
+            if (!isestr(token)) {
+                errTemp = {
+                    text: '無法取得登出用token',
+                    msg: 'invalid token',
+                }
+                return Promise.reject(errTemp)
+            }
+
             //urlLogOut
             let urlLogOut = getUrl('logOut')
             if (!isestr(urlLogOut)) {
@@ -583,15 +592,6 @@ function WUiLoginout(site, opt = {}) {
             if (errTemp !== null) {
                 return Promise.reject(errTemp)
             }
-
-            // //status
-            // // console.log('logout then', res)
-            // // => { data: { status: 1, time: "2021-08-16T14:13:27.189Z" } }
-            // let status = get(res, 'data.status')
-            // if (status !== 1) {
-            //     console.log('res', res)
-            //     return Promise.reject('登出時遭遇錯誤')
-            // }
 
             return {
                 token,
