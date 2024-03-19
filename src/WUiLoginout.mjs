@@ -1,5 +1,5 @@
 import axios from 'axios'
-import get from 'lodash/get'
+import get from 'lodash-es/get'
 import isDev from 'wsemi/src/isDev.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
