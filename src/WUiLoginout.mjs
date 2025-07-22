@@ -17,12 +17,13 @@ import pmConvertResolve from 'wsemi/src/pmConvertResolve.mjs'
  *
  * @param {String} site 輸入專案名稱字串
  * @param {Object} [opt={}] 輸入設定物件，預設{}
- * @param {String} [opt.params={}] 輸入，預設{}
- * @param {String} [opt.keyGlobal='___params___'] 輸入，預設'___params___'
- * @param {Integer} [opt.timeWaitAnimation=0] 輸入，預設0
- * @param {String} [opt.defToken='sys'] 輸入，預設'sys'
- * @param {String} [opt.apiName='api'] 輸入，預設'api'
- * @param {String} [opt.apiNameForVerify='getUserByToken'] 輸入，預設'getUserByToken'
+ * @param {String} [opt.params={}] 輸入儲存至全域window參數物件，預設{}
+ * @param {String} [opt.keyGlobal='___params___'] 輸入取得全域window參數用鍵字串，預設'___params___'
+ * @param {Integer} [opt.timeWaitAnimation=0] 輸入等待連線動畫展示延遲時間整數，預設0
+ * @param {String} [opt.defToken='sys'] 輸入預設token字串，預設'sys'
+ * @param {String} [opt.apiName='api'] 輸入預設api用子目錄字串，預設'api'
+ * @param {String} [opt.apiNameForVerify='getUserByToken'] 輸入apiName子目錄下，須呼叫傳入token取得使用者物件之api名稱字串，預設'getUserByToken'
+ * @param {String} [opt.urlForVerify=''] 輸入指定api網址字串，呼叫傳入token取得使用者物件，若給有效字串則會取消使用apiNameForVerify之功能，預設''
  * @param {Integer} [opt.retry=3] 輸入驗證token失敗重試次數整數，預設為3
  * @returns {Object} 回傳輔助函數物件，可使用'parseUrl'、'getTokenFromUrl'、'getToken'、'getValue'、'getUrl'、'getApi'、'login'、'detect'、'logout'
  * @example
@@ -101,6 +102,12 @@ function WUiLoginout(site, opt = {}) {
     let apiNameForVerify = get(opt, 'apiNameForVerify', '')
     if (!isestr(apiNameForVerify)) {
         apiNameForVerify = 'getUserByToken'
+    }
+
+    //urlForVerify
+    let urlForVerify = get(opt, 'urlForVerify', '')
+    if (!isestr(urlForVerify)) {
+        urlForVerify = ''
     }
 
     //retry
@@ -207,18 +214,9 @@ function WUiLoginout(site, opt = {}) {
         return url
     }
 
-
-    //getApi
-    let getApi = async(path) => {
+    //getApiCore
+    let getApiCore = async(url) => {
         let errTemp = null
-
-        //urlBase
-        let urlBase = getValue('base')
-        // console.log('getApi urlBase', urlBase)
-
-        //url
-        let url = `${urlBase}${apiName}/${path}`
-        // console.log('getApi url', url)
 
         //axios
         let r
@@ -239,6 +237,23 @@ function WUiLoginout(site, opt = {}) {
         if (errTemp !== null) {
             return Promise.reject(errTemp)
         }
+
+        return r
+    }
+
+    //getApi
+    let getApi = async(path) => {
+
+        //urlBase
+        let urlBase = getValue('base')
+        // console.log('getApi urlBase', urlBase)
+
+        //url
+        let url = `${urlBase}${apiName}/${path}`
+        // console.log('getApi url', url)
+
+        //getApiCore
+        let r = getApiCore(url)
 
         return r
     }
@@ -312,8 +327,15 @@ function WUiLoginout(site, opt = {}) {
             }
             // console.log('token', token)
 
-            //getApi
-            let data = await getApi(`${apiNameForVerify}?token=${token}`)
+            //callApi
+            let callApi = null
+            if (isestr(urlForVerify)) {
+                callApi = getApiCore(`${urlForVerify}?token=${token}`)
+            }
+            else {
+                callApi = getApi(`${apiNameForVerify}?token=${token}`)
+            }
+            let data = await callApi
                 .catch((err) => {
                     errTemp = {
                         text: '登入時無法連線',
