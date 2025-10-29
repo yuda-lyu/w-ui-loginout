@@ -12,6 +12,7 @@ A tool for login and logout in browser.
 To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-ui-loginout/global.html).
 
 ## Installation
+
 ### Using npm(ES6 module):
 ```alias
 npm i w-ui-loginout
@@ -58,7 +59,6 @@ ll.login({
 ```
 
 ### In a browser(UMD module):
-> **Note:** w-ui-loginout does not dependent on any package.
 
 Add script for w-ui-loginout.
 ```alias
