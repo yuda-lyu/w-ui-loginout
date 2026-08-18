@@ -62,6 +62,6 @@ ll.login({
 
 Add script for w-ui-loginout.
 ```alias
-<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.16/dist/w-ui-loginout.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.17/dist/w-ui-loginout.umd.js"></script>
 ```
 
