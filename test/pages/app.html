@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>w-ui-loginout fixture</title>
+</head>
+<body>
+    <!-- 模擬使用端: 只載入建出之UMD(等同README之UMD用法), 載入即呼叫login, 回呼內容逐行寫入#ev供測試讀取 -->
+    <div id="state">loading</div>
+    <button id="btnLogout">登出</button>
+    <button id="btnDetect">開始偵測</button>
+    <button id="btnStopDetect">停止偵測</button>
+    <button id="btnStopFirst">停止第一次偵測</button>
+    <pre id="ev"></pre>
+    <script src="/lib/w-ui-loginout.umd.js"></script>
+    <script>
+        (function() {
+
+            //cfg, 案例設定由網址hash傳入(本套件只讀location.search與origin+pathname, hash不影響受測行為)
+            var cfg = {}
+            try {
+                cfg = JSON.parse(decodeURIComponent(location.hash.slice(1)) || '{}')
+            }
+            catch (e) {}
+
+            var elEv = document.getElementById('ev')
+            var elState = document.getElementById('state')
+
+            //ser, 序列化回呼參數
+            function ser(x, d) {
+                if (d > 5) {
+                    return '[depth]'
+                }
+                if (x === undefined) {
+                    return '[undefined]'
+                }
+                if (x === null) {
+                    return null
+                }
+                if (typeof x === 'function') {
+                    return '[function]'
+                }
+                if (x instanceof Error) {
+                    return {
+                        __error: x.name,
+                        message: x.message,
+                        str: String(x),
+                        isPlainError: x.constructor === Error,
+                        status: x.status,
+                        responseStatus: x.response ? x.response.status : undefined,
+                        responseData: x.response ? ser(x.response.data, d + 1) : undefined,
+                        keys: Object.keys(x).sort(),
+                    }
+                }
+                if (typeof x !== 'object') {
+                    return x
+                }
+                if (Array.isArray(x)) {
+                    return x.map(function(v) {
+                        return ser(v, d + 1)
+                    })
+                }
+                var o = {}
+                Object.keys(x).forEach(function(k) {
+                    o[k] = ser(x[k], d + 1)
+                })
+                return o
+            }
+
+            //ev, 寫入一行事件
+            function ev(name, arg) {
+                elEv.textContent += JSON.stringify({ ev: name, t: Date.now(), arg: ser(arg, 0) }) + '\n'
+            }
+
+            window.addEventListener('unhandledrejection', function(e) {
+                ev('unhandledrejection', e.reason)
+            })
+
+            var W = window['w-ui-loginout']
+            if (typeof W !== 'function') {
+                ev('noGlobal', typeof W)
+                elState.textContent = 'noGlobal'
+                return
+            }
+
+            var ll = null
+            try {
+                ll = W(cfg.site || 'probe', cfg.wopt || {})
+            }
+            catch (e) {
+                ev('construct.throw', e)
+                elState.textContent = 'constructError'
+                return
+            }
+
+            //mk, 產生回呼: 記錄參數; cfg.throwIn列名者拋錯; cfg.ret指定回傳值(預設true); cfg.async列名者回傳延遲resolve之promise
+            function mk(name) {
+                return function(arg) {
+                    ev(name, arg)
+                    if ((cfg.throwIn || []).indexOf(name) >= 0) {
+                        throw new Error('boom-' + name)
+                    }
+                    var ret = (cfg.ret && Object.prototype.hasOwnProperty.call(cfg.ret, name)) ? cfg.ret[name] : true
+                    if ((cfg.async || []).indexOf(name) >= 0) {
+                        return new Promise(function(resolve) {
+                            setTimeout(function() {
+                                ev(name + '.done')
+                                resolve(ret)
+                            }, cfg.asyncMs || 300)
+                        })
+                    }
+                    return ret
+                }
+            }
+
+            //pick, 依cfg.omit略過指定回呼
+            function pick(o) {
+                var omit = cfg.omit || []
+                omit.forEach(function(k) {
+                    delete o[k]
+                })
+                return o
+            }
+
+            var loginOpt = {
+                afterGetUser: mk('afterGetUser'),
+                afterLogin: mk('afterLogin'),
+                loginSuccess: mk('loginSuccess'),
+                loginError: mk('loginError'),
+            }
+            var logoutOpt = pick({
+                procLogout: mk('logout.procLogout'),
+                afterLogout: mk('afterLogout'),
+                logoutSuccess: mk('logoutSuccess'),
+                logoutError: mk('logoutError'),
+            })
+            var detectOpt = {
+                timePeriod: (cfg.detect && cfg.detect.timePeriod) || 200,
+                procCheckToken: mk('detect.procCheckToken'),
+                procLogout: mk('detect.procLogout'),
+            }
+
+            var stops = []
+            function doDetect() {
+                ll.detect(detectOpt)
+                    .then(function(stop) {
+                        stops.push(stop)
+                        ev('detect.started', typeof stop)
+                    })
+                    .catch(function(e) {
+                        ev('detect.reject', e)
+                    })
+            }
+
+            function doLogout() {
+                ll.logout(logoutOpt)
+                    .then(function(r) {
+                        ev('logout.return', r)
+                        elState.textContent = 'logout:' + (r.state ? 'success' : 'error')
+                    })
+                    .catch(function(e) {
+                        ev('logout.reject', e)
+                        elState.textContent = 'logout:reject'
+                    })
+            }
+
+            document.getElementById('btnLogout').addEventListener('click', doLogout)
+            document.getElementById('btnDetect').addEventListener('click', doDetect)
+            document.getElementById('btnStopDetect').addEventListener('click', function() {
+                var s = stops[stops.length - 1]
+                if (s) {
+                    s()
+                    ev('detect.stopLast')
+                }
+            })
+            document.getElementById('btnStopFirst').addEventListener('click', function() {
+                var s = stops[0]
+                if (s) {
+                    s()
+                    ev('detect.stopFirst')
+                }
+            })
+
+            //calls, 呼叫公開函式並記錄回傳值(回傳promise者記錄其結果)
+            var calls = cfg.calls || []
+            calls.forEach(function(c) {
+                try {
+                    var r = ll[c.fn].apply(null, c.args || [])
+                    if (r && typeof r.then === 'function') {
+                        r.then(function(v) {
+                            ev('call.' + c.fn + '.resolve', v)
+                        }, function(e) {
+                            ev('call.' + c.fn + '.reject', e)
+                        })
+                    }
+                    else {
+                        ev('call.' + c.fn, r)
+                    }
+                }
+                catch (e) {
+                    ev('call.' + c.fn + '.throw', e)
+                }
+            })
+
+            //dumpGlobal, 記錄全域參數物件之鍵
+            var dumps = [].concat(cfg.dumpGlobal || [])
+            dumps.forEach(function(k) {
+                var g = window[k]
+                ev('global.' + k, g ? Object.keys(g).sort() : g)
+            })
+
+            //login, 載入即登入(同下游App.vue); 成功且cfg.detect時接著啟動偵測
+            if (cfg.login !== false) {
+                ll.login(loginOpt)
+                    .then(function(r) {
+                        ev('login.return', r)
+                        elState.textContent = 'login:' + (r.state ? 'success' : 'error')
+                        if (r.state && cfg.detect) {
+                            doDetect()
+                            if (cfg.detect.twice) {
+                                doDetect()
+                            }
+                        }
+                    })
+                    .catch(function(e) {
+                        ev('login.reject', e)
+                        elState.textContent = 'login:reject'
+                    })
+            }
+            else {
+                elState.textContent = 'idle'
+                if (cfg.detect) {
+                    doDetect()
+                }
+            }
+
+        })()
+    </script>
+</body>
+</html>

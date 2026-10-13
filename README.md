@@ -18,8 +18,10 @@ To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-
 npm i w-ui-loginout
 ```
 
+> This package runs in the browser (it uses `window`, `localStorage` and the built-in `fetch`). In Node.js it can be loaded (`require`/`import`), but its functions need a browser environment.
+
 #### Example for browser:
-> **Link:** [[dev source code](https://github.com/yuda-lyu/w-cluster/blob/master/g-cluster.mjs)]
+> **Link:** [[dev source code](https://github.com/yuda-lyu/w-ui-loginout/blob/master/src/WUiLoginout.mjs)]
 ```alias
 import wui from 'w-ui-loginout/src/WUiLoginout.mjs'
 
@@ -42,11 +44,13 @@ function loginError(data) {
 //login
 console.log('login...')
 let ll = wui('wperm', {
-    // logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
-    // logOut: '{base}sso/api/logout?token={token}',
-    // checkToken: '{base}sso/api/checkToken?token={token}',
-    // goSSO: '{base}sso/?token={token}',
-    // goPerm: '{baseNoPort}perm/?token={token}',
+    params: {
+        // logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
+        // logOut: '{base}sso/api/logout?token={token}',
+        // checkToken: '{base}sso/api/checkToken?token={token}',
+        // goSSO: '{base}sso/?token={token}',
+        // goPerm: '{baseNoPort}perm/?token={token}',
+    },
 })
 ll.login({
     afterGetUser: null,
@@ -60,8 +64,27 @@ ll.login({
 
 ### In a browser(UMD module):
 
-Add script for w-ui-loginout.
+Add script for w-ui-loginout. No other script is required.
 ```alias
-<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.31/dist/w-ui-loginout.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.32/dist/w-ui-loginout.umd.js"></script>
+```
+
+The global name contains hyphens, so get it by `window['w-ui-loginout']`.
+```alias
+let wui = window['w-ui-loginout']
+let ll = wui('wperm', {
+    params: {
+        // logOut: '{base}sso/api/logout?token={token}',
+        // checkToken: '{base}sso/api/checkToken?token={token}',
+    },
+})
+ll.login({
+    loginSuccess: (data) => {
+        console.log('login success', data.user)
+    },
+    loginError: (data) => {
+        console.log('login error', data.text, data.msg)
+    },
+})
 ```
 

@@ -1,4 +1,3 @@
-import axios from 'axios'
 import get from 'lodash-es/get.js'
 import isDev from 'wsemi/src/isDev.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
@@ -10,22 +9,46 @@ import ispm from 'wsemi/src/ispm.mjs'
 import cint from 'wsemi/src/cint.mjs'
 import delay from 'wsemi/src/delay.mjs'
 import pmConvertResolve from 'wsemi/src/pmConvertResolve.mjs'
+import httpGet from './httpGet.mjs'
+
+
+//toErr, 對外錯誤一律為{text,msg}: 已是此形狀者原樣回傳, 否則(流程中之非預期例外)包成{text,msg}, msg為原拋出值
+function toErr(err, text) {
+    if (iseobj(err) && isestr(err.text) && Object.prototype.hasOwnProperty.call(err, 'msg')) {
+        return err
+    }
+    return {
+        text,
+        msg: err,
+    }
+}
 
 
 /**
  * 前端界面用之使用者登入出輔助功能函數
  *
+ * 本套件為瀏覽器端工具(使用window、localStorage與內建fetch)，於Node僅可載入，呼叫需瀏覽器環境
+ *
+ * login、logout、detect之錯誤物件一律為{text,msg}，text為說明文字，msg之型別依情況而異:
+ * login之連線錯誤為字串(例'Error: Request failed with status code 500')；logout、detect之連線錯誤為Error物件(非2xx時帶status與response)；
+ * 流程中之非預期例外為原拋出值(text為'登入時發生例外'、'登出時發生例外'、'驗證令牌時發生例外')；其餘為字串代碼、伺服器回傳之msg或回應物件
+ *
+ * 回呼拋錯之處置:
+ * 流程內回呼(login之afterGetUser、logout之procLogout、detect之procCheckToken)拋錯視為該流程失敗，錯誤包成{text,msg}後走錯誤通道；
+ * 結束通知回呼(afterLogin、loginSuccess、loginError、afterLogout、logoutSuccess、logoutError、detect之procLogout)拋錯不吞，
+ * login與logout以原拋出值reject，detect之procLogout於計時器內呼叫故成為未處理之rejection；結束通知被呼叫前，本套件之狀態變更皆已完成
+ *
  * @param {String} site 輸入專案名稱字串
  * @param {Object} [opt={}] 輸入設定物件，預設{}
- * @param {String} [opt.params={}] 輸入儲存至全域window參數物件，預設{}
+ * @param {Object} [opt.params={}] 輸入儲存至全域window參數物件，可含網址模板例如logOut、checkToken，模板內可用{token}、{origin}、{originNoPort}、{base}、{baseNoPort}，預設{}
  * @param {String} [opt.keyGlobal='___params___'] 輸入取得全域window參數用鍵字串，預設'___params___'
  * @param {Integer} [opt.timeWaitAnimation=0] 輸入等待連線動畫展示延遲時間整數，預設0
  * @param {String} [opt.defToken='sys'] 輸入預設token字串，預設'sys'
  * @param {String} [opt.apiName='api'] 輸入預設api用子目錄字串，預設'api'
  * @param {String} [opt.apiNameForVerify='getUserByToken'] 輸入apiName子目錄下，須呼叫傳入token取得使用者物件之api名稱字串，預設'getUserByToken'
  * @param {String} [opt.urlForVerify=''] 輸入指定api網址字串，呼叫傳入token取得使用者物件，若給有效字串則會取消使用apiNameForVerify之功能，預設''
- * @param {Integer} [opt.retry=3] 輸入驗證token失敗重試次數整數，預設為3
- * @returns {Object} 回傳輔助函數物件，可使用'parseUrl'、'getTokenFromUrl'、'getToken'、'getValue'、'getUrl'、'getApi'、'login'、'detect'、'logout'
+ * @param {Integer} [opt.retry=3] 輸入detect檢查令牌失敗時之重試次數整數，預設為3
+ * @returns {Object} 回傳輔助函數物件，可使用'parseUrl'、'getTokenFromUrl'、'getToken'、'getValue'、'getUrl'、'getApi'、'login'、'detect'、'logout'；detect啟動成功時回傳停止偵測函數，未設定params.checkToken時reject{text,msg}；同一實例重複呼叫detect會取代進行中之偵測，logout會停止進行中之偵測；logout之procLogout與detect之procCheckToken收到之回應為{data,status,statusText,headers}
  * @example
  * import wui from 'w-ui-loginout/src/WUiLoginout.mjs'
  *
@@ -48,11 +71,13 @@ import pmConvertResolve from 'wsemi/src/pmConvertResolve.mjs'
  * //login
  * console.log('login...')
  * let ll = wui('wperm', {
- *     // logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
- *     // logOut: '{base}sso/api/logout?token={token}',
- *     // checkToken: '{base}sso/api/checkToken?token={token}',
- *     // goSSO: '{base}sso/?token={token}',
- *     // goPerm: '{baseNoPort}perm/?token={token}',
+ *     params: {
+ *         // logIn: '{base}sso/?sid=i12-i34-i56-i78', //提供sso指定需返回之專案sid
+ *         // logOut: '{base}sso/api/logout?token={token}',
+ *         // checkToken: '{base}sso/api/checkToken?token={token}',
+ *         // goSSO: '{base}sso/?token={token}',
+ *         // goPerm: '{baseNoPort}perm/?token={token}',
+ *     },
  * })
  * ll.login({
  *     afterGetUser: null,
@@ -142,6 +167,24 @@ function WUiLoginout(site, opt = {}) {
     }
 
 
+    //keyToken, localStorage儲存token之鍵, 格式為公開契約(下游直接讀寫)不可改
+    let keyToken = (s) => {
+        return `${s}:userToken`
+    }
+
+
+    //detecting, 進行中之偵測, 同一實例同時只有一個, 重複呼叫detect時取代、logout時停止
+    let detecting = null
+
+
+    //stopDetect, 停止進行中之偵測
+    let stopDetect = () => {
+        if (detecting !== null) {
+            detecting.stop()
+        }
+    }
+
+
     //parseUrl
     let parseUrl = () => {
 
@@ -184,7 +227,7 @@ function WUiLoginout(site, opt = {}) {
             // console.log('getTokenFromUrl', token)
         }
         if (!isestr(token)) {
-            token = localStorage.getItem(`${site}:userToken`) //[localStorage:token]
+            token = localStorage.getItem(keyToken(site)) //[localStorage:token]
             // console.log('localStorage.getItem', token)
         }
         return token
@@ -218,12 +261,9 @@ function WUiLoginout(site, opt = {}) {
     let getApiCore = async(url) => {
         let errTemp = null
 
-        //axios
+        //httpGet
         let r
-        await axios({
-            method: 'GET',
-            url,
-        })
+        await httpGet(url)
             .then((res) => {
                 r = res.data
                 // console.log('getApi then', r)
@@ -286,7 +326,6 @@ function WUiLoginout(site, opt = {}) {
 
             //check
             if (!isestr(site)) {
-                console.log('site', site)
                 throw new Error(`invalid site`)
             }
 
@@ -297,7 +336,7 @@ function WUiLoginout(site, opt = {}) {
                 // console.log('getTokenFromUrl', token)
             }
             if (!isestr(token)) {
-                token = localStorage.getItem(`${site}:userToken`) //[localStorage:token]
+                token = localStorage.getItem(keyToken(site)) //[localStorage:token]
                 // console.log('localStorage.getItem', token)
             }
 
@@ -364,7 +403,6 @@ function WUiLoginout(site, opt = {}) {
 
             //check
             if (!iseobj(user)) {
-                console.log('data', data)
                 errTemp = {
                     text: '登入時無法取得使用者資訊',
                     msg: 'invalid user',
@@ -395,15 +433,15 @@ function WUiLoginout(site, opt = {}) {
                 data = res
 
                 //save userToken
-                localStorage.setItem(`${site}:userToken`, res.token) //[localStorage:token]
+                localStorage.setItem(keyToken(site), res.token) //[localStorage:token]
 
             })
             .catch((err) => {
                 state = false
-                data = err
+                data = toErr(err, '登入時發生例外') //流程中之非預期例外(含afterGetUser拋錯)包成{text,msg}
 
                 //clear userToken
-                localStorage.setItem(`${site}:userToken`, '') //[localStorage:token]
+                localStorage.setItem(keyToken(site), '') //[localStorage:token]
 
             })
         let accdata = {
@@ -463,17 +501,45 @@ function WUiLoginout(site, opt = {}) {
         // console.log('site', site)
 
         //urlCheckToken
-        let urlCheckToken = getUrl('checkToken')
+        let urlCheckToken = ''
+        try {
+            urlCheckToken = getUrl('checkToken')
+        }
+        catch (err) {
+            return Promise.reject(toErr(err, '驗證令牌時發生例外'))
+        }
+
+        //check, 未設定checkToken網址即不啟動偵測(與logout之網址檢查對稱), 進行中之偵測不受影響
+        if (!isestr(urlCheckToken)) {
+            return Promise.reject({
+                text: '無法取得驗證令牌用設定資訊',
+                msg: 'invalid urlCheckToken',
+            })
+        }
+
+        //stopDetect, 同一實例同時只有一個偵測, 新呼叫取代進行中之偵測
+        stopDetect()
+
+        //poller, 本次偵測, stop可重複呼叫, 停止後不再發出新請求, 進行中之一輪完成時亦不再呼叫回呼
+        let poller = {
+            stopped: false,
+            timer: null,
+        }
+        poller.stop = () => {
+            poller.stopped = true
+            clearInterval(poller.timer)
+            if (detecting === poller) {
+                detecting = null
+            }
+        }
+        detecting = poller
 
         //checkTokenCore
         let checkTokenCore = async() => {
             let errTemp = null
 
-            //axios
-            let res = await axios({
-                method: 'GET',
-                url: urlCheckToken,
-            })
+            //httpGet
+            let res = await httpGet(urlCheckToken)
                 .catch((err) => {
                     // console.log('urlLogOut catch', err)
                     errTemp = {
@@ -502,10 +568,9 @@ function WUiLoginout(site, opt = {}) {
             let n = 0
             while (r.state === 'error') {
                 n += 1
-                if (n > retry) {
+                if (n > retry || poller.stopped) {
                     break
                 }
-                console.log(`retry n=${n}`)
                 r = await fun()
             }
 
@@ -528,7 +593,7 @@ function WUiLoginout(site, opt = {}) {
             locking = true
 
             //輪循確認ls內token是否存在
-            let token = localStorage.getItem(`${site}:userToken`) //[localStorage:token]
+            let token = localStorage.getItem(keyToken(site)) //[localStorage:token]
             // console.log('localStorage.getItem', token)
 
             //check
@@ -546,6 +611,11 @@ function WUiLoginout(site, opt = {}) {
                     errTemp = err
                 })
 
+            //check, 已停止者不再呼叫任何回呼
+            if (poller.stopped) {
+                return
+            }
+
             //check
             if (errTemp !== null) {
                 return Promise.reject(errTemp)
@@ -556,6 +626,9 @@ function WUiLoginout(site, opt = {}) {
                 let r = procCheckToken(res)
                 if (ispm(r)) {
                     r = await r
+                }
+                if (poller.stopped) {
+                    return
                 }
                 if (!r) {
                     errTemp = {
@@ -574,17 +647,27 @@ function WUiLoginout(site, opt = {}) {
         }
 
         //setInterval
-        let t = setInterval(() => {
+        poller.timer = setInterval(() => {
             core()
                 .catch((err) => {
-                    clearInterval(t)
-                    if (isfun(procLogout)) {
-                        procLogout(err)
+
+                    //check, 已停止者不再呼叫任何回呼
+                    if (poller.stopped) {
+                        return
                     }
+
+                    //stop, 偵測失敗即停止, 再通知procLogout
+                    poller.stop()
+
+                    //procLogout, 結束通知, 其拋錯不吞(成為未處理之rejection)
+                    if (isfun(procLogout)) {
+                        procLogout(toErr(err, '驗證令牌時發生例外')) //流程中之非預期例外(含procCheckToken拋錯)包成{text,msg}
+                    }
+
                 })
         }, timePeriod)
 
-        return null
+        return poller.stop
     }
 
 
@@ -606,6 +689,9 @@ function WUiLoginout(site, opt = {}) {
         //site
         let site = getValue('site')
         // console.log('site', site)
+
+        //stopDetect, 登出即停止進行中之偵測(於發請求前, 不論登出成敗)
+        stopDetect()
 
         async function core() {
             let errTemp = null
@@ -632,11 +718,8 @@ function WUiLoginout(site, opt = {}) {
                 return Promise.reject(errTemp)
             }
 
-            //axios
-            let res = await axios({
-                method: 'GET',
-                url: urlLogOut,
-            })
+            //httpGet
+            let res = await httpGet(urlLogOut)
                 .catch((err) => {
                     // console.log('urlLogOut catch', err)
                     errTemp = {
@@ -685,7 +768,7 @@ function WUiLoginout(site, opt = {}) {
             })
             .catch((err) => {
                 state = false
-                data = err
+                data = toErr(err, '登出時發生例外') //流程中之非預期例外(含procLogout拋錯)包成{text,msg}
 
             })
         let accdata = {
@@ -694,7 +777,7 @@ function WUiLoginout(site, opt = {}) {
         }
 
         //clear userToken
-        localStorage.setItem(`${site}:userToken`, '') //[localStorage:token]
+        localStorage.setItem(keyToken(site), '') //[localStorage:token]
 
         //afterLogout
         if (isfun(afterLogout)) {
