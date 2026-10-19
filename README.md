@@ -66,7 +66,7 @@ ll.login({
 
 Add script for w-ui-loginout. No other script is required.
 ```alias
-<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.32/dist/w-ui-loginout.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/w-ui-loginout@1.0.33/dist/w-ui-loginout.umd.js"></script>
 ```
 
 The global name contains hyphens, so get it by `window['w-ui-loginout']`.

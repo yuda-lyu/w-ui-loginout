@@ -9,5 +9,7 @@ rollupFiles({ //rollupFiles預設會clean folder
     fdTar,
 })
     .catch((err) => {
+        //建置失敗須以非0結束, 使發布流程得知
         console.log(err)
+        process.exitCode = 1
     })
