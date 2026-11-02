@@ -7,8 +7,8 @@ import buildUmd from './tools/buildUmd.mjs'
 import { fdSrcAbs } from './tools/srcDir.mjs'
 
 
-//unit-build: 以共用建置設定建置UMD並於Node載入
-//斷言對應規則帳本(CLAUDE_rulebook.md)之R2、R3、R4(U4、U5)、R14, 以及建構子之site檢查(P1)
+//unit-build: 以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/unit-build/build), 並於Node載入
+//斷言對應規則帳本(sgud/rule/rulebook.md)之R2、R3、R4(U4、U5)、R14, 以及建構子之site檢查(P1)
 describe('unit-build', function() {
 
     let fdTmp = path.resolve('./test/_tmp/unit-build')
@@ -24,12 +24,20 @@ describe('unit-build', function() {
         fs.rmSync(fdTmp, { recursive: true, force: true })
     })
 
+    it('B0 建置腳本於副本(cwd)離開碼0, 轉譯WUiLoginout.mjs, dist僅含kebab-case命名之UMD與sourcemap', function() {
+        //R14: toolg/gDistRollup.mjs以./src、./dist於cwd建置; fns與nameDistType決定產物檔名
+        assert.strictEqual(built.code, 0, built.logs.concat(built.warns).join('\n'))
+        assert.ok(built.logs.some((v) => v.includes('transpiling: WUiLoginout.mjs')), built.logs.join('\n'))
+        assert.deepStrictEqual(built.files, ['w-ui-loginout.umd.js', 'w-ui-loginout.umd.js.map'])
+        assert.ok(fs.statSync(built.fp).size > 0)
+    })
+
     it('B1 建置無無法解析之引用、無未命名之external, 且未印invalid runin', function() {
         //R2
         let bad = built.warns.filter((v) => /could not be resolved|No name was provided for external module/.test(v))
         assert.deepStrictEqual(bad, [])
 
-        //R14: 明給runin
+        //R14: runin為browser(非法值才印invalid runin)
         assert.deepStrictEqual(built.logs.filter((v) => v.includes('invalid runin')), [])
     })
 

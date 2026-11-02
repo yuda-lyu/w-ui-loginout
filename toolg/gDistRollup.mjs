@@ -1,12 +1,23 @@
 import rollupFiles from 'w-package-tools/src/rollupFiles.mjs'
-import opt from './distRollupOpt.mjs' //建置設定與測試共用
 
 
+let fdSrc = './src'
 let fdTar = './dist'
 
 rollupFiles({ //rollupFiles預設會clean folder
-    ...opt,
+    fns: 'WUiLoginout.mjs',
+    fdSrc,
     fdTar,
+    nameDistType: 'kebabCase',
+    runin: 'browser', //本套件為瀏覽器端工具
+    // bNodePolyfill: true,
+    // bMinify: false,
+    globals: {
+        // 'xlsx': 'XLSX',
+    },
+    external: [
+        // 'xlsx',
+    ],
 })
     .catch((err) => {
         //建置失敗須以非0結束, 使發布流程得知

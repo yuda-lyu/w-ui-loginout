@@ -1,3 +1,4 @@
+import assert from 'assert'
 import fs from 'fs'
 import path from 'path'
 import buildUmd from './buildUmd.mjs'
@@ -10,7 +11,7 @@ let keyLS = 'probe:userToken'
 
 
 /**
- * 建立e2e檔之共用環境: before建置UMD至test/_tmp/<案名>/build並啟動假伺服器, after關閉伺服器並刪除test/_tmp/<案名>;
+ * 建立e2e檔之共用環境: before以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/<案名>/build)並啟動假伺服器, after關閉伺服器並刪除test/_tmp/<案名>;
  * beforeEach/afterEach每案例一個全新瀏覽器
  *
  * @param {Object} opt 輸入設定物件
@@ -32,7 +33,9 @@ function setupE2e({ name, port }) {
     before(async function() {
         this.timeout(180000)
         rmTmp()
-        let { fp } = await buildUmd(path.join(fdTmp, 'build'))
+        let { code, fp, logs, warns } = await buildUmd(path.join(fdTmp, 'build'))
+        assert.strictEqual(code, 0, `toolg/gDistRollup.mjs離開碼${code}\n${logs.join('\n')}\n${warns.join('\n')}`)
+        assert.ok(fs.existsSync(fp), `未產出${fp}`)
         env.srv = await startFakeServer({ port, fpUmd: fp })
     })
 
