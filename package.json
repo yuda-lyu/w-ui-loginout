@@ -1,13 +1,13 @@
 {
   "name": "w-ui-loginout",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "main": "dist/w-ui-loginout.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.48"
+    "wsemi": "^1.9.49"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.23",
-    "w-package-tools-e2e": "^1.0.19"
+    "w-package-tools-e2e": "^1.0.20"
   },
   "scripts": {
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
