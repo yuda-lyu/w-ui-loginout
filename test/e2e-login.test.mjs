@@ -6,7 +6,7 @@ import { setupE2e, readEvents, waitEvent, evsOf, getLSToken, observeWindow } fro
 //斷言對應規則帳本(CLAUDE_rulebook.md)之R4、R5、R6、R10、R11、R13; 編號見帳本之測試清單
 describe('e2e-login', function() {
 
-    let env = setupE2e({ name: 'e2e-login', port: 8430 })
+    let env = setupE2e({ name: 'e2e-login' })
 
     //verifyReqs, 驗證請求(預設路徑/app/api/getUserByToken)
     let verifyReqs = () => {
@@ -85,7 +85,8 @@ describe('e2e-login', function() {
         assert.deepStrictEqual(e, { text: '登入時無法連線', msg: 'Error: Request failed with status code 500' })
 
         //R5⑦: 不含網址與token
-        assert.ok(!e.msg.includes('token') && !e.msg.includes('/app/') && !e.msg.includes('8430'))
+        //(埠為作業系統配發之實際埠env.port)
+        assert.ok(!e.msg.includes('token') && !e.msg.includes('/app/') && !e.msg.includes(String(env.port)))
         assert.strictEqual(await getLSToken(page), '')
     })
 

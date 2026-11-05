@@ -11,19 +11,19 @@ let keyLS = 'probe:userToken'
 
 
 /**
- * 建立e2e檔之共用環境: before以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/<案名>/build)並啟動假伺服器, after關閉伺服器並刪除test/_tmp/<案名>;
+ * 建立e2e檔之共用環境: before以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/<案名>/build), 再啟動假伺服器(埠由作業系統配發, listen(0), 實際埠印入輸出), after關閉伺服器並刪除test/_tmp/<案名>;
  * beforeEach/afterEach每案例一個全新瀏覽器
  *
  * @param {Object} opt 輸入設定物件
- * @param {String} opt.name 輸入案名(test/_tmp下之資料夾名)
- * @param {Integer} opt.port 輸入假伺服器埠號
- * @returns {Object} 回傳環境物件{srv,browser,url,openApp}, srv與browser於hook執行後才有值
+ * @param {String} opt.name 輸入案名(test/_tmp下之資料夾名, 亦為輸出之埠訊息前綴)
+ * @returns {Object} 回傳環境物件{srv,browser,port,url,openApp}, srv、browser與port於hook執行後才有值; port為作業系統配發之實際埠
  */
-function setupE2e({ name, port }) {
+function setupE2e({ name }) {
     let fdTmp = path.resolve('./test/_tmp', name)
     let env = {
         srv: null,
         browser: null,
+        port: null,
     }
 
     let rmTmp = () => {
@@ -36,7 +36,11 @@ function setupE2e({ name, port }) {
         let { code, fp, logs, warns } = await buildUmd(path.join(fdTmp, 'build'))
         assert.strictEqual(code, 0, `toolg/gDistRollup.mjs離開碼${code}\n${logs.join('\n')}\n${warns.join('\n')}`)
         assert.ok(fs.existsSync(fp), `未產出${fp}`)
-        env.srv = await startFakeServer({ port, fpUmd: fp })
+
+        //埠由作業系統配發(listen(0)), 實際埠取自server.address().port, 所有網址與斷言由env.port衍生
+        env.srv = await startFakeServer({ fpUmd: fp })
+        env.port = env.srv.port
+        console.log(`[${name}] [e2e-port] 實際埠 ${env.port}(作業系統配發)`)
     })
 
     after(async function() {
@@ -70,7 +74,7 @@ function setupE2e({ name, port }) {
         if (search !== null) {
             q = search //直接指定查詢字串
         }
-        return `http://${host}:${port}/app/${q}#${encodeURIComponent(JSON.stringify(cfg))}`
+        return `http://${host}:${env.port}/app/${q}#${encodeURIComponent(JSON.stringify(cfg))}`
     }
 
     //openApp, 開新頁面(可先於同源空白頁預置localStorage)後導航進fixture頁
@@ -88,7 +92,7 @@ function setupE2e({ name, port }) {
         })
         if (preLS !== null) {
             //前置(非act): 於同源空白頁預置localStorage
-            await page.goto(`http://${host}:${port}/blank`)
+            await page.goto(`http://${host}:${env.port}/blank`)
             await page.evaluate(([k, v]) => {
                 localStorage.setItem(k, v)
             }, [keyLS, preLS])

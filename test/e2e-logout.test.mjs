@@ -6,7 +6,7 @@ import { setupE2e, readEvents, waitEvent, evsOf, getLSToken, observeWindow } fro
 //斷言對應規則帳本(CLAUDE_rulebook.md)之R5、R6、R7、R10、R11、R12
 describe('e2e-logout', function() {
 
-    let env = setupE2e({ name: 'e2e-logout', port: 8431 })
+    let env = setupE2e({ name: 'e2e-logout' })
 
     let pLogOut = { logOut: '{origin}/sso/api/logout?token={token}', checkToken: '{origin}/sso/api/checkToken?token={token}' }
 

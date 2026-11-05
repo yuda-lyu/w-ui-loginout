@@ -2,7 +2,7 @@
 
 本檔為套件設計與開發階段之規則帳本,為要求程式碼須長成什麼樣,或由規格產出之測試(項目/說明/流程)有哪些,包含軸、單一擁有者、已知限制、破壞性變更紀錄,以及對應是哪些測試檔案或指令等,由agent自行編列、擴充與維護.
 
-> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15.各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
+> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15;測試埠一律由作業系統配發(`listen(0)`)見 R16(2026-11-05 ul309b).各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
 
 ## 軸
 
@@ -126,7 +126,24 @@
 | caniuse-lite 更新(Q6) | lockfile 釘 1.0.30001504;另案 |
 | wsemi `isDev()` 之 `if (location)` 防護無效 | 主控記為 wsemi 下一輪另案 |
 
-## 測試清單(由 R1–R14 衍生)
+## R16 測試埠:一律由作業系統配發(`listen(0)`),不用固定基準埠、不保留埠、不查行程表(2026-11-05 ul309b;規格 `C:/opensrcOper/dspec/e2e埠與多套件同跑.md` 本套件適用 E8,E4、E6)
+
+- **規則**:
+  1. **所有監聽都走 `listen(0)`**:本套件測試之監聽者(`test/tools/fakeServer.mjs` 之假伺服器、`api-httpGet` 之測試伺服器)都在測試行程內,`.listen(` 之第一個引數一律字面 `0`(後接逗號或右括號),實際埠取自 `server.address().port`;網址、斷言、期望值都由實際埠衍生.綁定位址維持原樣(`fakeServer` 不指定位址、`api-httpGet` 綁 `127.0.0.1`).`test/` 不得再有固定埠字面、`host:埠` 字面、埠命名(大小寫不拘)之數字指定或 `listen(<非 0>)`(`unit-noFixedPorts` PN-001–PN-004 守護;掃描 `test/` 含子夾〔不含 `_tmp`、`pics`〕之 `.mjs/.js/.cjs/.json/.html`,守護檔自身因樣本刻意含固定埠字樣而除外).
+  2. **不使用**:固定基準埠表、`reserveE2ePorts` 保留與位移、`E2E_PORT_OFFSET`/`E2E_PORT_HOLD`、行程表驗證(`listenerPids`)、`selfCheck`/`/__self`(PN-005 守護無殘留).行程內監聽者由作業系統配發,不會撞到任何固定埠之占用者,不需換埠機制;行程表查詢在高負載下可能逾時(主控實測 12–25 秒)而判斷錯誤,故不用.
+  3. **無人監聽之拒絕連線埠**(`api-httpGet` H6):於 H6 使用前才取得——`listen(0)` 取得一個埠後立刻關閉,再以 `net.connect` 確認為 `ECONNREFUSED` 才使用(連到他人或逾時者換下一個,最多 3 次,仍無則拋錯);不使用任何固定埠當「沒人監聽」.
+  4. **網址與期望值取實際埠**:`env.port`(`setupE2e`)、`port`/`portRefused`(`api-httpGet`);斷言「不含埠」者(e2e-login L5)用 `String(env.port)`,不寫字面.
+  5. **實際埠印入輸出(E6)**:每個會監聽之測試檔印一行 `[案名] [e2e-port] 實際埠 N(作業系統配發)`(`api-httpGet` 於 H6 另印拒絕連線埠一行;PN-006 守護).
+  6. **絕不下殺(E4)**:本套件沒有任何依埠、依名稱、依命令列下殺占用者之程式;測試只關閉自己啟動之瀏覽器與假伺服器、並刪自己之 `test/_tmp/<案名>`.日後新增下殺須先改本條並附「他人占用時不殺」之真實占用者測試.
+  7. **畫面含埠(E7)**:無.本套件無標準圖(`test/pics` 不存在),fixture 頁(`test/pages/app.html`)不顯示埠;斷言含埠者(e2e-options P2 之 `{origin}`/`{base}`)已取實際埠.
+- **理由**:全套多套件同機同跑時,固定埠互撞.Windows 上 `::` 與 `127.0.0.1` 可同時監聽同一埠,固定埠 `listen` 成功不代表瀏覽器連得到自己(2026-11-05 實測:占用者綁 `127.0.0.1` 占住 8430,舊固定埠版 e2e-login 2 passing／13 failing 且占用者被打到 14 次;`::` 占用者則 `before` 即 EADDRINUSE).改由作業系統配發從根本不撞,也不必偵測占用與換埠.
+- **盤點指令**:
+  - (機械守護:`unit-noFixedPorts` PN-001)`Grep "\.listen\(" test/` → 每筆第一個引數皆為 `0`(`fakeServer.mjs`、`api-httpGet.test.mjs` 之 `getRefusedPort` 與測試伺服器;守護檔自身之說明與樣本除外).
+  - `Grep "localhost:|127\.0\.0\.1:" test/` → 僅 `${env.port}`／`${port}`／`${portRefused}` 模板;`e2eHelpers.mjs` 之 `${host}:${env.port}`(host 為 `127.0.0.1` 或 `localhost`,即「模式軸」,與埠無關);守護檔自身之樣本除外.
+  - `Grep "killPortListeners|taskkill|Stop-Process|process\.kill|\.kill\(|wmic|netstat|killOwn|reapShard|SIGKILL|SIGTERM" src/ toolg/ test/` → 0 命中(`sgud/` 內之說明字樣不計).
+- **測試**:`test/unit-noFixedPorts.test.mjs` PN-000–PN-006(皆為原始碼靜態掃描,不開任何 socket,不斷言任何具體埠號,與機器上哪些埠被占用、作業系統配發範圍、負載無關);占用舊埠之整合實測、同機重複跑、高負載連跑與變異結果見交付報告 ul309b.
+
+## 測試清單(由 R1–R14、R16 衍生)
 
 主機:正式模式 `127.0.0.1`,開發模式 `localhost`(標 dev 者).
 
@@ -158,6 +175,11 @@
 | e2e-detect | B2-D2 | 啟動時之例外(params.checkToken 非字串) | `detect()` reject `{text:'驗證令牌時發生例外', msg:TypeError}`、無請求 | R10 |
 | e2e-detect | B4-S、B4-F、B4-R | 停止、停止時有進行中之一輪、重複呼叫 | 停止後無請求無回呼;取代語意 | R12 |
 | e2e-options | P2–P8 | 公開函式與 opt 鍵 | getUrl 佔位符、parseUrl 等、keyGlobal、timeWaitAnimation、defToken、apiName/apiNameForVerify、retry、回呼 promise 之 await | — |
+| unit-noFixedPorts | PN-000 | 掃描範圍、規則與註解遮罩自測 | 範圍含 `fakeServer.mjs`、`e2eHelpers.mjs`、`api-httpGet.test.mjs`、`pages/app.html` 等且 `.listen(` 站點 ≥ 2;各規則對已知正例必抓、已知反例不抓;註解內字樣不計,字串、正則、範本內之 `/*`、`//`、引號不使其後之程式被誤判為註解 | R16 |
+| unit-noFixedPorts | PN-001 | 所有 `.listen(` | 第一個引數皆為字面 `0`(`0 + x`、`0 \|\| x`、`{port}`、變數、字串 `'0'` 皆違規) | R16 規則 1 |
+| unit-noFixedPorts | PN-002、PN-003、PN-004 | 固定埠字面 | 無 `host:埠` 字面、無埠命名(大小寫不拘)之數字指定與範本運算式內之純數字、無引號包住之 4–5 位純數字字串與舊段 84xx 字面 | R16 規則 1、4 |
+| unit-noFixedPorts | PN-005 | 舊機制殘留 | 無 `reserveE2ePorts`、`reserveTestPorts`、`reservePorts`、`listenReserved`、`verifyListening`、`TEST_PORTS`、`selfCheck`、`__self`、`listenerPids`、`describePortOwners`、`E2E_PORT_*`、`portChild`、`e2ePorts` 字樣;`e2ePorts.mjs`、`portChild.mjs`、`unit-e2ePorts.test.mjs` 不存在 | R16 規則 2 |
+| unit-noFixedPorts | PN-006 | 會監聽之測試檔(呼叫 `.listen(` 或 `startFakeServer(`) | 皆印 `[案名] [e2e-port] 實際埠 N(作業系統配發)`(註解掉者不算) | R16 規則 5 |
 | (刻意不測) | — | login 內 `invalid site` | 只在竄改 `window[keyGlobal].site` 時可達 | — |
 
 ## e2e 落地映射(對應全域技能 role-coder-for-test-e2e §3)
@@ -166,11 +188,11 @@
 
 | 項目 | 值 |
 |---|---|
-| 後端 | 無產品後端;測試用假伺服器 `test/tools/fakeServer.mjs`,每個檔固定一埠:8430(e2e-login)、8431(e2e-logout)、8432(e2e-detect)、8433(e2e-options)、8434(api-httpGet),範圍 8425–8449,寫死不隨機(mocha `--parallel` 下各檔獨立程序) |
+| 後端 | 無產品後端;測試用假伺服器 `test/tools/fakeServer.mjs`,在測試行程內以 `listen(0)` 由作業系統配發埠(實際埠取自 `server.address().port`,`env.port`;`api-httpGet` 同,綁 `127.0.0.1`),無固定基準埠、不保留埠、不下殺(R16);mocha `--parallel` 下各檔獨立程序、各自配發 |
 | 前端 | 無;fixture 使用端頁 `test/pages/app.html` 只載建出之 UMD(等同 README 之 UMD 用法),由網址 hash 傳入案例設定 |
 | 建置 | 各檔 `before` 以 `test/tools/buildUmd.mjs` 把 `src`、`toolg`、`package.json` 複製到 `test/_tmp/<檔名>/build/`,spawn 指定 cwd 執行副本之 `toolg/gDistRollup.mjs`(UMD 在副本之 `dist/`),`after` 刪除 |
 | e2e 執行 | `npm test`;單檔 `npx mocha test/e2e-login.test.mjs --timeout 180000` |
-| 共用實作 | `w-package-tools-e2e` ^1.0.6(devDependency),經 `test/tools/e2eLib.mjs` 單一橋接:`launchChromium`、`registerCleanupHooks`、`pollUntil` |
+| 共用實作 | `w-package-tools-e2e` ^1.0.22(devDependency),經 `test/tools/e2eLib.mjs` 單一橋接:`launchChromium`、`registerCleanupHooks`、`pollUntil` |
 | 修前紅之驗證 | 測試工具讀環境變數 `WUL_FDSRC`(預設 `./src`)決定建置與掃描之 src 目錄;修前副本以 `git show HEAD:src/WUiLoginout.mjs` 取至 `./tmp/` 後指向之 |
 
 ### 契約映射
@@ -178,7 +200,7 @@
 | 契約 | 本專案 | 偏離與依據 |
 |---|---|---|
 | C1 launch wrapper | `launchChromium({ headless:true })` 單一出口 | 無截圖,不需確定性渲染旗標 |
-| C2 server lifecycle | 每檔 `before` 起假伺服器、`after` 關閉 + `registerCleanupHooks` | |
+| C2 server lifecycle | 每檔 `before` 起假伺服器(`listen(0)` 作業系統配發埠)、`after` 關閉 + `registerCleanupHooks` | 行程內監聽者不用 `reserveE2ePorts`/`createServiceManager`(無子行程服務、無固定埠),規格 E8 允許改由作業系統配發,見 R16 |
 | C3/C4/C5 | 不適用 | 無設定檔、無 DB、無登入態與語系 |
 | C6–C9 截圖、紅框、遮罩、比對 | 不適用 | 本套件為純 API,無產品畫面;fixture 頁為測試鷹架,不設標準圖 |
 | C10 輸入 | 不適用 | 無輸入欄;act 為導航(帶 `?token=`)與點擊 fixture 頁之登出鈕 |

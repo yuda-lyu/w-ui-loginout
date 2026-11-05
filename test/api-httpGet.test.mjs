@@ -1,17 +1,55 @@
 import assert from 'assert'
 import http from 'http'
+import net from 'net'
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { fdSrcAbs } from './tools/srcDir.mjs'
+
+
+//getRefusedPort, 取得確實拒絕連線之埠: 以listen(0)由作業系統配發一個埠後立刻關閉, 再連線確認為ECONNREFUSED(連到他人或逾時者換下一個, 最多3次, 仍無則拋錯)
+async function getRefusedPort() {
+    let probe = (p) => {
+        return new Promise((resolve) => {
+            let s = net.connect({ host: '127.0.0.1', port: p })
+            s.setTimeout(5000, () => {
+                s.destroy()
+                resolve('timeout')
+            })
+            s.once('connect', () => {
+                s.destroy()
+                resolve('connected')
+            })
+            s.once('error', (err) => {
+                resolve(err.code)
+            })
+        })
+    }
+    let codes = []
+    for (let i = 0; i < 3; i++) {
+        let srv = http.createServer()
+        await new Promise((resolve, reject) => {
+            srv.once('error', reject)
+            srv.listen(0, '127.0.0.1', resolve)
+        })
+        let p = srv.address().port
+        await new Promise((resolve) => srv.close(resolve))
+        let code = await probe(p)
+        if (code === 'ECONNREFUSED') {
+            return p
+        }
+        codes.push(code)
+    }
+    throw new Error(`無法取得拒絕連線之埠: ${codes.join(',')}`)
+}
 
 
 //api-httpGet: 以Node內建fetch直打本地假伺服器, 驗證httpGet之語意
 //斷言對應規則帳本(CLAUDE_rulebook.md)之R5①–⑧
 describe('api-httpGet', function() {
 
-    let port = 8434
-    let portRefused = 8435 //無人監聽之埠(8425–8449內)
-    let base = `http://127.0.0.1:${port}`
+    //埠皆由作業系統配發(listen(0)): port為假伺服器之實際埠(before取得); 拒絕連線埠於H6使用前才取得(縮短取得與使用之間隔)
+    let port = null
+    let base = ''
     let server = null
     let sockets = new Set()
     let lastAccept = ''
@@ -66,8 +104,11 @@ describe('api-httpGet', function() {
         })
         await new Promise((resolve, reject) => {
             server.once('error', reject)
-            server.listen(port, '127.0.0.1', resolve)
+            server.listen(0, '127.0.0.1', resolve)
         })
+        port = server.address().port
+        base = `http://127.0.0.1:${port}`
+        console.log(`[api-httpGet] [e2e-port] 實際埠 ${port}(作業系統配發)`)
     })
 
     after(async function() {
@@ -129,6 +170,8 @@ describe('api-httpGet', function() {
     })
 
     it('H6 連線中斷、拒絕連線、網址無法解析: reject一般Error(Network Error), 不附原始錯誤、不含網址', async function() {
+        let portRefused = await getRefusedPort() //作業系統配發後已關閉且連線確認為ECONNREFUSED之埠
+        console.log(`[api-httpGet] [e2e-port] 拒絕連線埠 ${portRefused}(作業系統配發後已關閉, 連線確認為ECONNREFUSED)`)
         let urls = [
             `${base}/destroy?token=secret`,
             `http://127.0.0.1:${portRefused}/x?token=secret`,

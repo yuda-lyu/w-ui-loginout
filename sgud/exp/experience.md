@@ -32,7 +32,7 @@
 - **fixture 頁之內嵌腳本不寫分號時,以 `(` 開頭之行會黏到上一行**:`btn.addEventListener(...)` 下一行寫 `(cfg.calls || []).forEach(...)`,被解析成 `addEventListener(...)(...)`,頁面拋 `TypeError ... is not a function`,所有 e2e 一起逾時.改為先指派變數再呼叫.全部 e2e 同時逾時時,先開除錯腳本看 pageerror(`tmp/run02/dbg-fixture.mjs`).
 - **不得動 git 索引**:本輪曾為刪除佔位測試誤下 `git rm --cached`,索引因而多一筆 staged 刪除.以 `git add <檔>` 加回(檔案未變,索引即同 HEAD),再以 `git diff --cached --stat` 為空確認,之後只用 `rm` 刪工作目錄之檔.刪除受追蹤檔一律只動工作目錄.
 - **修前紅要分兩層證**:①修前原樣(axios 不可解析):幾乎全紅,但紅因多半是 axios;②修前 + 可用 axios(`tmp/run02/headA`,原型 A 之作法):只剩斷言行為變更之案例為紅(B1、B2、B4、除錯輸出、錯誤格式、回應形狀),未變更之行為兩邊皆綠.②才證明各案例對其規則有分辨力.測試工具以環境變數 `WUL_FDSRC`、`WUL_README` 指向副本,不動工作樹.
-- **mocha `--parallel` 下各檔獨立程序**:各 e2e 檔各自在 `before` 建 UMD 至 `test/_tmp/<檔名>/build`、各用一個固定埠(8430–8434),互不干擾;`after` 刪除自己之子資料夾,`test/_tmp/` 本身保留空目錄(已 gitignore).
+- **mocha `--parallel` 下各檔獨立程序**:各 e2e 檔各自在 `before` 建 UMD 至 `test/_tmp/<檔名>/build`、各用作業系統配發之埠(`listen(0)`,見七),互不干擾;`after` 刪除自己之子資料夾,`test/_tmp/` 本身保留空目錄(已 gitignore).
 - **`.editorconfig` 為 CRLF**:Write 工具寫出 LF;新增檔以 `tmp/run02/to-crlf.mjs` 轉 CRLF 後須重跑測試與 eslint.git 之 autocrlf 會於提交時正規化,行尾不影響版本庫內容.
 - **建置設定單一來源**:`toolg/distRollupOpt.mjs` 由 `gDistRollup.mjs` 與 `test/tools/buildUmd.mjs` 共用;改建置設定只改這一處.(2026-11-02 依 dspec〈自有套件之發布與建置腳本〉撤,改回標準寫法)
 - **報告中之案數以 mocha json 輸出逐檔計數**(`--reporter json --reporter-option output=<檔>`):本輪自檢曾把 e2e 案數心算成 48(實為 46),追加案例後亦須重算各檔行數與案數.
@@ -50,3 +50,11 @@
 - **副本須含 `package.json`**:`rollupFile` 以 cwd 之 `package.json` 取版本與 banner,副本只有 `src`、`toolg` 時建置以 ENOENT 失敗.副本放 `test/_tmp/<案名>/build/`(repo 內),toolg 與 src 之裸引用由 repo 之 `node_modules` 往上解析,不必連結 `node_modules`.
 - **舊 toolg 建出之 UMD 與副本建出者逐 byte 相同**(sha256 前 16 碼 `2accba90050f9fd6`);sourcemap 只有 `sources` 之相對路徑(`../` 層數)隨副本位置不同,`mappings`、`sourcesContent` 相同,不是行為差異,比對 dist 以 UMD 為準.
 - **建置探測可直接用正式腳本**:前述「建置探測不可跑 `toolg/gDistRollup.mjs`」之替代手段,現可把 `src`、`toolg`、`package.json` 複製到 `./tmp/<名>/` 後以 cwd 指定執行,設定即為正式腳本本身,不必自抄一份.
+
+## 七、測試埠:行程內監聽者用 `listen(0)`(2026-11-05,ul309 → ul309b;規則帳本 R16)
+
+- **行程內監聽者一律 `listen(0)`,勿用行程表驗證**:本套件的假伺服器與測試伺服器都在測試行程內,由作業系統配發埠即從根本不撞固定埠之占用者,不需基準埠表、保留埠(`reserveE2ePorts`)、位移換埠與監聽者驗證.ul309 的作法(保留埠＋`listenerPids` 查行程表確認監聽者恰為本行程,查不到才請求自己)在高負載下行程表查詢逾時(主控實測 12–25 秒,超過 5 秒回 null),退路判斷錯誤,發布前全套紅(PP-015,偶發 PP-004),故整套移除(ul309b).
+- **固定埠 `listen` 成功不代表連得到自己(Windows)**:`::` 與 `127.0.0.1` 可同時監聽同一埠,占用者綁 `127.0.0.1:8430` 時假伺服器 `listen(8430)`(雙棧 `::`)照樣成功,瀏覽器卻連到占用者(舊固定埠版實測 e2e-login 2 passing／13 failing,占用者被打到 14 次);占用者綁 `::` 時才是 EADDRINUSE.驗證「不再依賴固定埠」要用舊埠(8430–8435)分別以 `127.0.0.1`、`0.0.0.0`、`::` 綁定占用者各跑一次,只跑雙棧占用者會漏掉共存的洞.
+- **「無人監聽之拒絕連線埠」不可寫死一個「應該沒人用」的埠**:`listen(0)` 取得埠後立刻關閉,再 `net.connect` 確認為 `ECONNREFUSED` 才使用(連到他人或逾時者換下一個,最多 3 次,仍無則拋錯);取得與使用之間理論上有空窗,故以連線確認而非假設.
+- **守護只掃原始碼、不斷言具體埠號**:`unit-noFixedPorts` 掃 `test/`:所有 `.listen(` 第一引數為 `0`、無 `host:埠` 字面、無埠命名之數字指定、無引號包住之 4–5 位純數字字串(斷言「訊息不含埠」寫回 `'8430'` 會被抓)、無舊機制字樣.掃描規則須有已知正例／反例自測與「掃描範圍非空」檢查(PN-000),否則掃描範圍壞掉時也是綠;「某埠現在是否空閒」之類與環境相關之斷言一律不寫.
+- **變異腳本被背景時限終止時 `finally` 不會執行**:ul309 第一次變異跑到第 14 項時被終止,`api-httpGet.test.mjs` 停在變異狀態(發現後手動還原).變異腳本一律:①先備份原檔並提供 `--restore`;②每項結果即時附加寫檔;③以 `run_in_background` 並明給 `timeout`(前景指令逾 10 分鐘會被自動轉背景後再被終止).

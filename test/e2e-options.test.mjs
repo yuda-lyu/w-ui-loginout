@@ -6,8 +6,7 @@ import { setupE2e, readEvents, waitEvent, evsOf } from './tools/e2eHelpers.mjs'
 //斷言對應規則帳本(CLAUDE_rulebook.md)測試清單之P2–P8
 describe('e2e-options', function() {
 
-    let port = 8433
-    let env = setupE2e({ name: 'e2e-options', port })
+    let env = setupE2e({ name: 'e2e-options' })
 
     let tpl = '{token}|{origin}|{originNoPort}|{base}|{baseNoPort}'
 
@@ -28,7 +27,7 @@ describe('e2e-options', function() {
         let { page } = await env.openApp({ search: '?token=urlv&a=1', preLS: 'lsv', cfg })
         await waitEvent(page, 'call.getValue', { count: 2 })
         let evs = await readEvents(page)
-        let o = `http://127.0.0.1:${port}`
+        let o = `http://127.0.0.1:${env.port}` //作業系統配發之實際埠
         let gu = evsOf(evs, 'call.getUrl')
         assert.strictEqual(gu[0].arg, `urlv|${o}|http://127.0.0.1|${o}/app/|http://127.0.0.1/app/`)
         assert.strictEqual(gu[1].arg, '')

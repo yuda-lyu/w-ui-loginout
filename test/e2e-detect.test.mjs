@@ -7,7 +7,7 @@ import { pollUntil } from './tools/e2eLib.mjs'
 //斷言對應規則帳本(CLAUDE_rulebook.md)之R5、R7、R10、R11、R12、R13
 describe('e2e-detect', function() {
 
-    let env = setupE2e({ name: 'e2e-detect', port: 8432 })
+    let env = setupE2e({ name: 'e2e-detect' })
 
     let pAll = { logOut: '{origin}/sso/api/logout?token={token}', checkToken: '{origin}/sso/api/checkToken?token={token}' }
 

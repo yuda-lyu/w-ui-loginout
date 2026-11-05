@@ -19,14 +19,15 @@ let fpPageDef = path.resolve('./test/pages/app.html')
  *   /sso/api/logout       登出(mode.logout)
  * 模式: ok、e500、e401、html、nouser、neterr(直接斷線)、hang(不回應)、slow(延遲後ok)
  *
+ * 監聽埠一律由作業系統配發(listen(0), 綁定位址維持不指定), 實際埠取自server.address().port並由回傳之port提供, 呼叫端之網址與斷言皆由其衍生
+ *
  * @param {Object} opt 輸入設定物件
- * @param {Integer} opt.port 輸入埠號
  * @param {String} opt.fpUmd 輸入UMD檔路徑
  * @param {String} [opt.fpPage] 輸入fixture頁路徑，預設test/pages/app.html
- * @returns {Promise} 回傳Promise，resolve為{port,setMode,resetMode,getLog,clearLog,close}
+ * @returns {Promise} 回傳Promise，resolve為{port,setMode,resetMode,getLog,clearLog,close}，port為作業系統配發之實際埠
  */
 async function startFakeServer(opt = {}) {
-    let { port, fpUmd, fpPage = fpPageDef } = opt
+    let { fpUmd, fpPage = fpPageDef } = opt
 
     let mode = {}
     let resetMode = () => {
@@ -130,8 +131,9 @@ async function startFakeServer(opt = {}) {
 
     await new Promise((resolve, reject) => {
         server.once('error', reject)
-        server.listen(port, resolve)
+        server.listen(0, resolve)
     })
+    let port = server.address().port
 
     let close = () => {
         return new Promise((resolve) => {
