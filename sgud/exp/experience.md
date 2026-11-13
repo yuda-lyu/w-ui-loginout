@@ -58,3 +58,14 @@
 - **「無人監聽之拒絕連線埠」不可寫死一個「應該沒人用」的埠**:`listen(0)` 取得埠後立刻關閉,再 `net.connect` 確認為 `ECONNREFUSED` 才使用(連到他人或逾時者換下一個,最多 3 次,仍無則拋錯);取得與使用之間理論上有空窗,故以連線確認而非假設.
 - **守護只掃原始碼、不斷言具體埠號**:`unit-noFixedPorts` 掃 `test/`:所有 `.listen(` 第一引數為 `0`、無 `host:埠` 字面、無埠命名之數字指定、無引號包住之 4–5 位純數字字串(斷言「訊息不含埠」寫回 `'8430'` 會被抓)、無舊機制字樣.掃描規則須有已知正例／反例自測與「掃描範圍非空」檢查(PN-000),否則掃描範圍壞掉時也是綠;「某埠現在是否空閒」之類與環境相關之斷言一律不寫.
 - **變異腳本被背景時限終止時 `finally` 不會執行**:ul309 第一次變異跑到第 14 項時被終止,`api-httpGet.test.mjs` 停在變異狀態(發現後手動還原).變異腳本一律:①先備份原檔並提供 `--restore`;②每項結果即時附加寫檔;③以 `run_in_background` 並明給 `timeout`(前景指令逾 10 分鐘會被自動轉背景後再被終止).
+
+## 八、瀏覽器啟動改經 w-playwright(2026-11-13,pm-uil;規則帳本 R17)
+
+- **本套件原本就沒有直接依賴 Playwright**:`package.json` 無 `playwright`／`playwright-core`,啟動點只有 `test/tools/e2eLib.mjs` 一處(深層匯入 `w-package-tools-e2e/src/launchChromium.mjs`,其內直接 `import { chromium } from 'playwright'`);故「移除 playwright」是空操作,實改為加 devDependency `w-playwright` 與換掉橋接檔之匯出.`src`、`dist` 不引用 Playwright,`toolg/gDistRollup.mjs` 之 `external`／`globals` 不必動.
+- **`node_modules/playwright` 仍在是正常的**:`w-package-tools-e2e` 1.0.32 還宣告 `playwright ^1.64.1`(傳遞相依),待其改版移除後才會消失;R-PW-ONLY 只掃本套件原始碼與 `package.json` 宣告,不看 `node_modules`.
+- **本套件只啟動 headless shell**(`headless:true`、未給 `channel`),w-playwright 不讀錯誤次數也不會累計;守門參數照加(`args` 恰一個 `--disable-features`,最後一個元素).設計 §5.2「每檔最多啟動一次」只約束真 Chrome／Edge／完整 Chromium,故不改成同檔共用瀏覽器,維持每案例一個全新瀏覽器.
+- **接線測試用 `setBrowserTypeForTest` 套在 `setupE2e` 的 hooks 上**:`unit-wpwWiring` 在同一 `describe` 內先註冊「安裝替身」的 `beforeEach`、再呼叫 `setupE2e`(其 `beforeEach` 才會啟動瀏覽器),替身即接住真呼叫點而不啟動任何瀏覽器;替身收到的是 w-playwright 合併後的選項(`autoInstall` 等自用鍵已被剝除,所以「`autoInstall: true`」只能以靜態檢查出口原始碼驗,見 PO4).要證真路徑(接縫不用替身)另用 `next()` 轉交真 Playwright 啟動 headless shell 一次(W3).
+- **掃描型測試的自我命中**:R-PW-ONLY 正則掃到測試檔自身的樣本字串會誤報;樣本一律以 `${q}`、`${d}`、`${b}` 組字,不寫完整的匯入句;舊路徑正則以片段 `join('/')` 組出;PO3 對自身檔另行略過.
+- **修前紅的證法(不啟動修前瀏覽器)**:靜態測試以 `git archive HEAD src test toolg package.json` 解到 `./tmp/pm-uil/base/`,把新測試檔複製進去,以 `quiet-run --cwd` 在該副本執行 mocha(PO2、PO3、PO4 紅、PO0、PO1 綠);動態接線測試以「出口繞過 w-playwright 但不啟動任何瀏覽器」之變異證紅(W1–W3 全紅),不跑修前的直接 Playwright 啟動.
+- **`npm i` 會把 `package-lock.json` 的 `version` 同步成 `package.json` 的版本**(本輪 1.0.48 → 1.0.49,`package.json` 本就是 1.0.49):不是改了 version,是 lock 原本落後一版.
+- **Bash 工具的 heredoc 附加寫檔會被守門擋下**;sgud 文件一律用 Edit／Write.

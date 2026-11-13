@@ -2,7 +2,7 @@
 
 本檔為套件設計與開發階段之規則帳本,為要求程式碼須長成什麼樣,或由規格產出之測試(項目/說明/流程)有哪些,包含軸、單一擁有者、已知限制、破壞性變更紀錄,以及對應是哪些測試檔案或指令等,由agent自行編列、擴充與維護.
 
-> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15;測試埠一律由作業系統配發(`listen(0)`)見 R16(2026-11-05 ul309b).各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
+> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15;測試埠一律由作業系統配發(`listen(0)`)見 R16(2026-11-05 ul309b);Chromium 系瀏覽器之啟動一律經 w-playwright 見 R17(2026-11-13 pm-uil).各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
 
 ## 軸
 
@@ -143,7 +143,22 @@
   - `Grep "killPortListeners|taskkill|Stop-Process|process\.kill|\.kill\(|wmic|netstat|killOwn|reapShard|SIGKILL|SIGTERM" src/ toolg/ test/` → 0 命中(`sgud/` 內之說明字樣不計).
 - **測試**:`test/unit-noFixedPorts.test.mjs` PN-000–PN-006(皆為原始碼靜態掃描,不開任何 socket,不斷言任何具體埠號,與機器上哪些埠被占用、作業系統配發範圍、負載無關);占用舊埠之整合實測、同機重複跑、高負載連跑與變異結果見交付報告 ul309b.
 
-## 測試清單(由 R1–R14、R16 衍生)
+## R17 Chromium 系瀏覽器之啟動一律經 w-playwright(2026-11-13 pm-uil;對應 w-playwright 帳本 R-PW-ONLY、R-PW-WIRING)
+
+- **規則**:
+  1. **不直接依賴、不直接匯入 Playwright**:`src`、`test`、`toolg` 之 `.mjs`/`.js` 不得以靜態或動態 `import`、`require` 引用 `playwright`／`playwright-core`;`package.json` 不得宣告兩者(含 dev).`node_modules` 內之 `playwright`／`playwright-core` 只是 `w-playwright` 與 `w-package-tools-e2e` 之相依傳遞而來,非本套件宣告.
+  2. **測試啟動瀏覽器之點只有一處**:`test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: true })`(`import wpw from 'w-playwright'`);`test/tools/e2eHelpers.mjs` 之 `setupE2e` 的 `beforeEach` 經它啟動.不得再深層引用 `w-package-tools-e2e` 之 `launchChromium`／`launchChromiumCore`／`launchBrowser`(其內直接使用 Playwright,繞過 w-playwright 之守門參數),不得自行 `chromium.launch(`.不改用 `launchBrowser`(多六個確定性渲染旗標,本套件無截圖不需).
+  3. **只啟動無頭 headless shell**(`headless: true`,不給 `channel`／`executablePath`):不啟動真 Chrome、Edge 或完整 Chromium,故不觸發 Chromium 153 起「每個新根行程以錯誤密碼呼叫一次 `LogonUser`」之帳號鎖定風險;w-playwright 仍於每次啟動加入守門參數.設計 §5.2 之「會啟動真 Chrome／Edge／完整 Chromium 之測試檔每檔最多啟動一次」不適用本套件(headless shell 之共用屬效能、選做),維持每案例一個全新瀏覽器.
+  4. **`w-playwright` 為 `devDependencies`(`^1.0.1`)**:`src` 與 `dist` 不引用它,故 `toolg/gDistRollup.mjs` 之 `external`／`globals` 不變(R14).
+  5. **README 之 Testing 節**寫明:安裝帶入之 playwright-core、受管瀏覽器以 `ensureChromium()` 取得(不寫 `npx playwright install`)、離線用 `PLAYWRIGHT_BROWSERS_PATH`(載入前設定)、真 Chrome／Edge 須自行安裝、一律加入之守門參數與原因、`PWDEBUG`／`SELENIUM_REMOTE_URL` 不支援.
+- **行為差異(測試端)**:原 `w-package-tools-e2e` 之 `launchChromium` 在 Linux 缺系統相依時會自動 `install-deps`;w-playwright 之 `installDeps` 預設關,本套件未開,故 Linux 缺相依時啟動失敗(`E_LAUNCH`)而不自動安裝.本套件測試在 Windows 執行,不受影響.
+- **盤點指令**(命中數須為 0;先以 `rg … <w-playwright 套件根>/src` 確認指令對必命中之 `src/_pw.mjs` 有效):
+  - `rg -n --glob '*.{mjs,js}' --glob '!**/node_modules/**' --glob '!**/dist/**' "(from\s+|import\(\s*|require\(\s*)['\"\`]playwright(-core)?['\"\`/]" src test toolg` → 0 命中.
+  - `rg -n --glob '**/package.json' --glob '!**/node_modules/**' "\"playwright(-core)?\"\s*:" package.json` → 0 命中.
+  - `rg -n "wpw\.(launchChromium|launchChromiumPersistent)\(" src test` → 僅 `test/tools/e2eLib.mjs` 一處(`test/unit-pwOnly.test.mjs` 自身之字串樣本不計).
+- **測試**:`test/unit-pwOnly.test.mjs` PO0–PO4(靜態:盤點有效性、無直接匯入、package.json 宣告、啟動點全集、單一出口寫法);`test/unit-wpwWiring.test.mjs` W1–W3(以 `wpw.setBrowserTypeForTest` 替身收啟動選項:替身確被呼叫、`args` 恰一個 `--disable-features` 且為最後一個元素並含 `AutofillAiWalletPrivatePasses`、只啟動無頭;W3 以 `next()` 真啟動 headless shell 一次,接縫不用替身).變異:出口改為不經 w-playwright 時 W1–W3 皆轉紅;出口丟棄呼叫端選項時 W2 轉紅;`package.json` 加回 `playwright` 時 PO2 轉紅;移除 `autoInstall: true` 時 PO4 轉紅.
+
+## 測試清單(由 R1–R14、R16、R17 衍生)
 
 主機:正式模式 `127.0.0.1`,開發模式 `localhost`(標 dev 者).
 
@@ -180,6 +195,14 @@
 | unit-noFixedPorts | PN-002、PN-003、PN-004 | 固定埠字面 | 無 `host:埠` 字面、無埠命名(大小寫不拘)之數字指定與範本運算式內之純數字、無引號包住之 4–5 位純數字字串與舊段 84xx 字面 | R16 規則 1、4 |
 | unit-noFixedPorts | PN-005 | 舊機制殘留 | 無 `reserveE2ePorts`、`reserveTestPorts`、`reservePorts`、`listenReserved`、`verifyListening`、`TEST_PORTS`、`selfCheck`、`__self`、`listenerPids`、`describePortOwners`、`E2E_PORT_*`、`portChild`、`e2ePorts` 字樣;`e2ePorts.mjs`、`portChild.mjs`、`unit-e2ePorts.test.mjs` 不存在 | R16 規則 2 |
 | unit-noFixedPorts | PN-006 | 會監聽之測試檔(呼叫 `.listen(` 或 `startFakeServer(`) | 皆印 `[案名] [e2e-port] 實際埠 N(作業系統配發)`(註解掉者不算) | R16 規則 5 |
+| unit-pwOnly | PO0 | 盤點有效性(防空集合) | `src`、`test`、`toolg` 皆有掃描檔且總數 ≥ 10;正則對靜態 import、動態 import、require、`playwright/…` 深層、反引號寫法皆命中,對 `w-playwright`、`playwright-extra`、註解、一般字串不命中 | R17 規則 1 |
+| unit-pwOnly | PO1 | 無直接匯入 | `src`、`test`、`toolg` 命中 0 | R17 規則 1 |
+| unit-pwOnly | PO2 | package.json 宣告 | 四種依賴類別皆無 `playwright`／`playwright-core`;`devDependencies['w-playwright']` 為 `^1.0.1` 且不在 `dependencies`;實裝版本主版 1 且不低於 1.0.1 | R17 規則 1、4 |
+| unit-pwOnly | PO3 | 啟動點全集 | `wpw.launchChromium(`／`launchChromiumPersistent(` 只在 `test/tools/e2eLib.mjs` 一處;無舊啟動路徑之深層匯入;無 `chromium.launch(` 等直接啟動 | R17 規則 2 |
+| unit-pwOnly | PO4 | 單一出口寫法 | `e2eLib` 為 `wpw.launchChromium({ ...opt, autoInstall: true })`;`e2eHelpers` 經 `e2eLib` 啟動且只呼叫一次 | R17 規則 2 |
+| unit-wpwWiring | W1 | `setupE2e` 的 `beforeEach` 經 w-playwright | 替身被呼叫 1 次、`env.browser` 為替身回傳者;選項無通道與執行檔、`headless:true`;`args` 恰一個 `--disable-features` 且為最後元素,含守門與 Playwright 預設功能;`ignoreDefaultArgs` 去掉預設那一串;`autoInstall` 不轉傳給 Playwright | R17 規則 2、3 |
+| unit-wpwWiring | W2 | 出口原樣傳入呼叫端選項 | `timeout`、`args`(`--lang=en-US`)保留,呼叫端自給之 `--disable-features=Translate` 併入同一串且仍恰一串 | R17 規則 2 |
+| unit-wpwWiring | W3 | `next()` 真路徑 | 合併後選項真啟動 headless shell,可 `newPage`/`setContent`/讀取,`version()` 有值;替身確被呼叫 1 次 | R17 規則 2、3 |
 | (刻意不測) | — | login 內 `invalid site` | 只在竄改 `window[keyGlobal].site` 時可達 | — |
 
 ## e2e 落地映射(對應全域技能 role-coder-for-test-e2e §3)
@@ -192,14 +215,15 @@
 | 前端 | 無;fixture 使用端頁 `test/pages/app.html` 只載建出之 UMD(等同 README 之 UMD 用法),由網址 hash 傳入案例設定 |
 | 建置 | 各檔 `before` 以 `test/tools/buildUmd.mjs` 把 `src`、`toolg`、`package.json` 複製到 `test/_tmp/<檔名>/build/`,spawn 指定 cwd 執行副本之 `toolg/gDistRollup.mjs`(UMD 在副本之 `dist/`),`after` 刪除 |
 | e2e 執行 | `npm test`;單檔 `npx mocha test/e2e-login.test.mjs --timeout 180000` |
-| 共用實作 | `w-package-tools-e2e` ^1.0.22(devDependency),經 `test/tools/e2eLib.mjs` 單一橋接:`launchChromium`、`registerCleanupHooks`、`pollUntil` |
+| 共用實作 | `w-package-tools-e2e` ^1.0.32(devDependency)之 `registerCleanupHooks`、`pollUntil`,與 `w-playwright` ^1.0.1(devDependency)之 `launchChromium`,皆經 `test/tools/e2eLib.mjs` 單一橋接(瀏覽器啟動一律經 w-playwright,見 R17) |
+| 改動範圍 → 測試檔 | `src/` 改動:全部 `e2e-*`、`api-*`、`unit-*`;`test/tools/e2eLib.mjs`、`e2eHelpers.mjs` 改動:全部 `e2e-*` 與 `unit-wpwWiring`、`unit-pwOnly`;`package.json` 依賴改動:`unit-imports`、`unit-pwOnly`;`toolg/` 或 `README.md` 改動:`unit-build`、`unit-docs`;全套約 1–2 分鐘,改到共用基礎時直接跑全套 |
 | 修前紅之驗證 | 測試工具讀環境變數 `WUL_FDSRC`(預設 `./src`)決定建置與掃描之 src 目錄;修前副本以 `git show HEAD:src/WUiLoginout.mjs` 取至 `./tmp/` 後指向之 |
 
 ### 契約映射
 
 | 契約 | 本專案 | 偏離與依據 |
 |---|---|---|
-| C1 launch wrapper | `launchChromium({ headless:true })` 單一出口 | 無截圖,不需確定性渲染旗標 |
+| C1 launch wrapper | `test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: true })` 單一出口(經 w-playwright,R17);呼叫端只給 `{ headless:true }` | 無截圖,不需確定性渲染旗標(故不用 `launchBrowser`);w-playwright 另於每次啟動加入守門參數 |
 | C2 server lifecycle | 每檔 `before` 起假伺服器(`listen(0)` 作業系統配發埠)、`after` 關閉 + `registerCleanupHooks` | 行程內監聽者不用 `reserveE2ePorts`/`createServiceManager`(無子行程服務、無固定埠),規格 E8 允許改由作業系統配發,見 R16 |
 | C3/C4/C5 | 不適用 | 無設定檔、無 DB、無登入態與語系 |
 | C6–C9 截圖、紅框、遮罩、比對 | 不適用 | 本套件為純 API,無產品畫面;fixture 頁為測試鷹架,不設標準圖 |

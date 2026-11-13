@@ -88,3 +88,14 @@ ll.login({
 })
 ```
 
+## Testing (development only)
+
+The browser tests in `test/` (`npm test`) launch Chromium only through [w-playwright](https://www.npmjs.com/package/w-playwright) (a devDependency, `import wpw from 'w-playwright'`); this package depends on neither `playwright` nor `playwright-core` directly. The tests use the headless shell managed by Playwright only (no real Google Chrome, Microsoft Edge or full Chromium is started).
+
+1. **Installation**: `npm i` brings in `playwright-core` (exact version, pinned by w-playwright). Do not install `playwright` or `playwright-core` separately.
+2. **Browser download**: the managed headless shell is fetched through w-playwright. The tests start it with `autoInstall: true`, so a missing browser is downloaded once before the first launch. To fetch it in advance, run `await wpw.ensureChromium()` (do not use `npx playwright install`: a different Playwright version in the dependency tree could download a different browser build). On Linux, missing system libraries are not installed automatically (w-playwright option `installDeps`).
+3. **Offline**: download the browser on a connected machine with the same w-playwright version, copy Playwright's browser folder to the target machine and point the environment variable `PLAYWRIGHT_BROWSERS_PATH` at it. Set it before the tests start; it is read when Playwright is loaded.
+4. **Real Chrome / Edge**: not used by these tests. Anything that launches them through w-playwright (`channel: 'chrome'` or `'msedge'`) requires the browser to be installed.
+5. **Guard argument**: w-playwright always gives exactly one `--disable-features` on every launch (Playwright's default list plus `AutofillAiWalletPrivatePasses` plus the caller's own). Since Chromium 153, every new browser root process on Windows calls `LogonUser` once with a wrong password for the current user, which counts as a failed logon; ten of them within ten minutes lock the account. Disabling that feature prevents it. There is no option to turn the guard off.
+6. **Unsupported environment variables**: `PWDEBUG` (inspector mode) and `SELENIUM_REMOTE_URL` make w-playwright reject the launch.
+
