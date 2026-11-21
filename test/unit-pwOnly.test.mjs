@@ -135,7 +135,9 @@ describe('unit-pwOnly', function() {
                 assert.strictEqual((pkg[k] || {})[name], undefined, `${k}不得宣告${name}`)
             }
         }
-        assert.strictEqual((pkg.devDependencies || {})['w-playwright'], '^1.0.1')
+        //宣告之下限以cmpVer比較, 不寫死字面(字面'^1.0.1'於2026-11-21連動升為'^1.0.2'時失效)
+        let m = /^\^(\d+\.\d+\.\d+)$/.exec((pkg.devDependencies || {})['w-playwright'] || '')
+        assert.ok(m && cmpVer(m[1], '1.0.1') >= 0, `devDependencies須宣告w-playwright ^1.0.1以上: ${(pkg.devDependencies || {})['w-playwright']}`)
         assert.strictEqual((pkg.dependencies || {})['w-playwright'], undefined, 'src不啟動瀏覽器, w-playwright只屬dev')
         let pw = readJson('./node_modules/w-playwright/package.json')
         assert.ok(cmpVer(pw.version, '1.0.1') >= 0 && parseInt(pw.version, 10) === 1, `實裝版本: ${pw.version}`)
