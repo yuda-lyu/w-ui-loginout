@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import buildUmd from './buildUmd.mjs'
 import startFakeServer from './fakeServer.mjs'
-import { launchChromium, registerCleanupHooks } from './e2eLib.mjs'
+import { PW_INSTALL_BUDGET_MS, ensureE2eBrowser, launchChromium, registerCleanupHooks } from './e2eLib.mjs'
 
 
 //keyLS, fixture頁之site為probe, localStorage鍵格式為公開契約(R6), 測試直接寫字串以確保格式未變
@@ -11,8 +11,9 @@ let keyLS = 'probe:userToken'
 
 
 /**
- * 建立e2e檔之共用環境: before以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/<案名>/build), 再啟動假伺服器(埠由作業系統配發, listen(0), 實際埠印入輸出), after關閉伺服器並刪除test/_tmp/<案名>;
- * beforeEach/afterEach每案例一個全新瀏覽器
+ * 建立e2e檔之共用環境: 第一個before集中取得Playwright受管瀏覽器(ensureE2eBrowser, 時限對齊安裝預算; 首次安裝約數百MB, 不與建置共用時限);
+ * 第二個before以副本並指定cwd執行toolg/gDistRollup.mjs建置UMD(副本為test/_tmp/<案名>/build), 再啟動假伺服器(埠由作業系統配發, listen(0), 實際埠印入輸出), after關閉伺服器並刪除test/_tmp/<案名>;
+ * beforeEach/afterEach每案例一個全新瀏覽器(只啟動已備妥者, 啟動不安裝)
  *
  * @param {Object} opt 輸入設定物件
  * @param {String} opt.name 輸入案名(test/_tmp下之資料夾名, 亦為輸出之埠訊息前綴)
@@ -30,7 +31,15 @@ function setupE2e({ name }) {
         fs.rmSync(fdTmp, { recursive: true, force: true })
     }
 
-    before(async function() {
+    //集中取得受管瀏覽器: 獨立before, 時限為安裝預算加60秒餘裕(餘裕供ensureChromium逾時後之收尾與錯誤回報)
+    //mocha --parallel下各檔各在自己之worker執行, 跨行程之安裝鎖由Playwright負責, 至多一個行程真下載, 其餘等候者等其完成(等候上限見e2eLib之已知取捨)
+    //hook具名(ensureBrowser、buildAndServe), 失敗時mocha之標題可分辨是取得瀏覽器或建置失敗
+    before(async function ensureBrowser() {
+        this.timeout(PW_INSTALL_BUDGET_MS + 60000)
+        await ensureE2eBrowser()
+    })
+
+    before(async function buildAndServe() {
         this.timeout(180000)
         rmTmp()
         let { code, fp, logs, warns } = await buildUmd(path.join(fdTmp, 'build'))

@@ -2,7 +2,7 @@
 
 本檔為套件設計與開發階段之規則帳本,為要求程式碼須長成什麼樣,或由規格產出之測試(項目/說明/流程)有哪些,包含軸、單一擁有者、已知限制、破壞性變更紀錄,以及對應是哪些測試檔案或指令等,由agent自行編列、擴充與維護.
 
-> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15;測試埠一律由作業系統配發(`listen(0)`)見 R16(2026-11-05 ul309b);Chromium 系瀏覽器之啟動一律經 w-playwright 見 R17(2026-11-13 pm-uil).各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
+> 狀態:**定案(2026-10-14 run02,依主控複審 `C:\opensrcOper\dnow\20261014042249\review\run01-複審.md` 之裁示)**.方案 C(原生 fetch);B1–B4 本輪修(R7、R10–R12);除錯輸出移除(R13);建置腳本依 dspec〈自有套件之發布與建置腳本〉(R14;2026-11-02 撤共用設定檔);另案事項見 R15;測試埠一律由作業系統配發(`listen(0)`)見 R16(2026-11-05 ul309b);Chromium 系瀏覽器之啟動一律經 w-playwright 見 R17(2026-11-13 pm-uil);首次取得 Playwright 受管瀏覽器集中於共用工具、時限對齊安裝預算見 R18(2026-11-25 tul632).各條「修前」為 2026-10-14 實測(審計第 1 次),「測試」欄為對應測試檔與案例編號.全盤產物:`./tmp/w-ui-loginout-全盤.md`.
 
 ## 軸
 
@@ -147,7 +147,7 @@
 
 - **規則**:
   1. **不直接依賴、不直接匯入 Playwright**:`src`、`test`、`toolg` 之 `.mjs`/`.js` 不得以靜態或動態 `import`、`require` 引用 `playwright`／`playwright-core`;`package.json` 不得宣告兩者(含 dev).`node_modules` 內之 `playwright`／`playwright-core` 只是 `w-playwright` 與 `w-package-tools-e2e` 之相依傳遞而來,非本套件宣告.
-  2. **測試啟動瀏覽器之點只有一處**:`test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: true })`(`import wpw from 'w-playwright'`);`test/tools/e2eHelpers.mjs` 之 `setupE2e` 的 `beforeEach` 經它啟動.不得再深層引用 `w-package-tools-e2e` 之 `launchChromium`／`launchChromiumCore`／`launchBrowser`(其內直接使用 Playwright,繞過 w-playwright 之守門參數),不得自行 `chromium.launch(`.不改用 `launchBrowser`(多六個確定性渲染旗標,本套件無截圖不需).
+  2. **測試啟動瀏覽器之點只有一處**:`test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: false })`(`import wpw from 'w-playwright'`;2026-11-25 起啟動不安裝,瀏覽器之取得見 R18);`test/tools/e2eHelpers.mjs` 之 `setupE2e` 的 `beforeEach` 經它啟動.不得再深層引用 `w-package-tools-e2e` 之 `launchChromium`／`launchChromiumCore`／`launchBrowser`(其內直接使用 Playwright,繞過 w-playwright 之守門參數),不得自行 `chromium.launch(`.不改用 `launchBrowser`(多六個確定性渲染旗標,本套件無截圖不需).
   3. **只啟動無頭 headless shell**(`headless: true`,不給 `channel`／`executablePath`):不啟動真 Chrome、Edge 或完整 Chromium,故不觸發 Chromium 153 起「每個新根行程以錯誤密碼呼叫一次 `LogonUser`」之帳號鎖定風險;w-playwright 仍於每次啟動加入守門參數.設計 §5.2 之「會啟動真 Chrome／Edge／完整 Chromium 之測試檔每檔最多啟動一次」不適用本套件(headless shell 之共用屬效能、選做),維持每案例一個全新瀏覽器.
   4. **`w-playwright` 為 `devDependencies`(`^1.0.1`)**:`src` 與 `dist` 不引用它,故 `toolg/gDistRollup.mjs` 之 `external`／`globals` 不變(R14).
   5. **README 之 Testing 節**寫明:安裝帶入之 playwright-core、受管瀏覽器以 `ensureChromium()` 取得(不寫 `npx playwright install`)、離線用 `PLAYWRIGHT_BROWSERS_PATH`(載入前設定)、真 Chrome／Edge 須自行安裝、一律加入之守門參數與原因、`PWDEBUG`／`SELENIUM_REMOTE_URL` 不支援.
@@ -156,9 +156,25 @@
   - `rg -n --glob '*.{mjs,js}' --glob '!**/node_modules/**' --glob '!**/dist/**' "(from\s+|import\(\s*|require\(\s*)['\"\`]playwright(-core)?['\"\`/]" src test toolg` → 0 命中.
   - `rg -n --glob '**/package.json' --glob '!**/node_modules/**' "\"playwright(-core)?\"\s*:" package.json` → 0 命中.
   - `rg -n "wpw\.(launchChromium|launchChromiumPersistent)\(" src test` → 僅 `test/tools/e2eLib.mjs` 一處(`test/unit-pwOnly.test.mjs` 自身之字串樣本不計).
-- **測試**:`test/unit-pwOnly.test.mjs` PO0–PO4(靜態:盤點有效性、無直接匯入、package.json 宣告、啟動點全集、單一出口寫法);`test/unit-wpwWiring.test.mjs` W1–W3(以 `wpw.setBrowserTypeForTest` 替身收啟動選項:替身確被呼叫、`args` 恰一個 `--disable-features` 且為最後一個元素並含 `AutofillAiWalletPrivatePasses`、只啟動無頭;W3 以 `next()` 真啟動 headless shell 一次,接縫不用替身).變異:出口改為不經 w-playwright 時 W1–W3 皆轉紅;出口丟棄呼叫端選項時 W2 轉紅;`package.json` 加回 `playwright` 時 PO2 轉紅;移除 `autoInstall: true` 時 PO4 轉紅.
+- **測試**:`test/unit-pwOnly.test.mjs` PO0–PO4(靜態:盤點有效性、無直接匯入、package.json 宣告、啟動點全集、單一出口寫法);`test/unit-wpwWiring.test.mjs` W1–W3(以 `wpw.setBrowserTypeForTest` 替身收啟動選項:替身確被呼叫、`args` 恰一個 `--disable-features` 且為最後一個元素並含 `AutofillAiWalletPrivatePasses`、只啟動無頭;W3 以 `next()` 真啟動 headless shell 一次,接縫不用替身);W4 屬 R18.變異:出口改為不經 w-playwright 時 W1–W3 皆轉紅;出口丟棄呼叫端選項時 W2 轉紅;`package.json` 加回 `playwright` 時 PO2 轉紅;`autoInstall: false` 改回 `true` 時 PO4(及 R18 之 PI5、PI6)轉紅.
 
-## 測試清單(由 R1–R14、R16、R17 衍生)
+## R18 首次取得 Playwright 受管瀏覽器:集中於共用工具,時限對齊安裝預算(2026-11-25 tul632;對應「平行測試之外部資源取得」盤查 B 類)
+
+- **規則**:
+  1. **取得集中於共用工具**:`test/tools/e2eLib.mjs` 匯出 `PW_INSTALL_BUDGET_MS`(900000＝15 分鐘)與 `ensureE2eBrowser()`;後者呼叫 `wpw.ensureChromium({ timeout: PW_INSTALL_BUDGET_MS })`(預設種類即 headless shell),**同行程只執行一次**(並行呼叫共用同一 Promise).失敗之處置:**逾時**(w-playwright 之 `E_INSTALL` 且訊息含 `timed out`)於同行程內記憶,同 worker 其後之檔於 `before` 立即以同一錯誤失敗,不各再等滿預算;**其他失敗**(離線、等候安裝鎖逾時等)不記憶,下次呼叫重試;失敗時印一行含 `code` 與安裝子行程輸出尾段(2000 字元)之診斷.`wpw.ensureChromium(` 在 `src`、`test`、`toolg` 只有 `e2eLib.mjs` 一處.
+  2. **取得獨立成一個 `before`,時限對齊安裝預算**:`setupE2e`(`test/tools/e2eHelpers.mjs`)之第一個 `before` 為 `this.timeout(PW_INSTALL_BUDGET_MS + 60000)` 後 `await ensureE2eBrowser()`;第二個 `before` 才是建置 UMD、起假伺服器(仍 `this.timeout(180000)`).兩者不共用 180 秒.兩個 hook 皆具名(`ensureBrowser`、`buildAndServe`),失敗時 mocha 標題可分辨.`this.timeout` 須在 `await` 之前(計時器於 hook 啟動時即以預設時限起算,事後才設只會讓讀到之 hook 時限看似正確),W4 以去註解後之原始碼核對順序與 `await`.
+  3. **其後之啟動不再安裝**:`launchChromium` 明給 `autoInstall: false`(取代原 `true`):缺受管瀏覽器時 w-playwright 立即 `E_BROWSER_MISSING`,不在每案例 `beforeEach`(只有全域 `--timeout 180000`)內隱式下載;`test/` 內不得出現 `autoInstall: true`(`unit-pwInstall` 自身之樣本與說明除外).呼叫端自給之 `autoInstall` 不生效.
+  4. **取值依據(`PW_INSTALL_BUDGET_MS`)**:取得內容在 Windows 為 headless shell＋ffmpeg＋winldd 三項(解開後約 300 MB;實測見 `sgud/state/state.md` 最近一次驗證);w-playwright 自身測試(`api-autoInstall`)對同一操作(空目錄真下載)給 600000 毫秒;`mocha --parallel` 下等候安裝鎖之 worker 須先等持鎖者下載完再各做一次已安裝之檢查,故取其 1.5 倍;逾預算由 `ensureChromium` 結束安裝子行程樹並 reject(測試明確失敗而不無限等待).**已知取捨**:等候者另受 Playwright 自身安裝鎖重試上限約束(20 次指數退避,依其參數估約 8 分鐘,其原始碼註解寫 10 分鐘;讀自原始碼,未以慢網路實測),持鎖者之下載超過此時間(極慢網路)時,等候者以安裝子行程離開碼 1 失敗而不是等滿預算.w-playwright 匯出建議之安裝預算常數後改取該值.
+  5. **證據機制**:`ensureE2eBrowser` 開始時印 `[e2e-browser] pid=… 開始取得受管瀏覽器(預算…ms)`,對每項真下載(Playwright 輸出 `Downloading <名稱> from …`,已去終端機控制碼)印一行 `[e2e-browser] pid=… 真下載: <名稱>`(不印網址),完成時印一行 `[e2e-browser] pid=… 瀏覽器已備妥(<種類>), 耗時…ms, 本行程之安裝子行程真下載N項`.空瀏覽器目錄下平行全套之輸出中,各項 `真下載:` 各恰一次,即安裝恰一次(其餘 worker 只印耗時較長、真下載 0 項之完成行,即等候安裝鎖).**證據之限制**:Playwright 於環境變數 `npm_config_loglevel` 為 `silent`／`error`／`warn` 時不印 `Downloading`(以 `npm test --silent` 或 `.npmrc` 設 `loglevel=warn` 跑時,持鎖者亦顯示真下載 0 項),驗收須在未設該變數或為 `notice` 下進行,並以瀏覽器目錄內三項產物(`chromium_headless_shell-*`、`ffmpeg-*`、`winldd-*`)核對;同一項下載重試時 `Downloading` 會再印一次(計數可能多於項數).
+- **理由**:原本 `launchChromium` 帶 `autoInstall: true`,首次下載隱式發生在 `setupE2e` 的 `beforeEach`(時限為全域 180 秒);平行之 5 個檔(4 個 e2e＋`unit-wpwWiring`)首次同時啟動,Playwright 之安裝鎖保證至多下載一次,但等候者之 `beforeEach` 仍可能先逾時(盤查 B 類).
+- **模擬「尚未安裝」之作法(驗收用)**:`PLAYWRIGHT_BROWSERS_PATH` 指向本庫 `./tmp/` 下之空夾後跑平行全套(須於行程啟動前設定,w-playwright 載入時讀取);**不得刪除或改動使用者層級之 `%LOCALAPPDATA%/ms-playwright`**(全機各套件共用);驗完先確認夾內無目錄連結再刪.
+- **盤點指令**:
+  - `Grep "wpw\.ensureChromium\(" src test toolg` → 僅 `test/tools/e2eLib.mjs`(`test/unit-pwInstall.test.mjs` 自身不計).
+  - `Grep "autoInstall: true" test` → 僅 `test/unit-pwInstall.test.mjs` 自身之樣本與說明(PI5 之樣本、PI6 之標題與訊息;PI6 守護其餘檔案 0 命中).
+  - `Grep "ensureE2eBrowser\(" test/tools/e2eHelpers.mjs` → 去註解後恰 1 處且為 `await ensureE2eBrowser()`(PI6 守護;匯入列與說明註解不含括號之字樣不計).
+- **測試**:`test/unit-pwInstall.test.mjs` PI0–PI7(替身只換 `wpw.ensureChromium`／`wpw.launchChromium`,以查詢字串匯入全新 `e2eLib` 實例使記憶獨立;PI0 接縫自測、PI1 逾時取預算且預算不短於 600000、PI2 同行程只取一次、PI3 非逾時失敗不記憶且印診斷行、PI4 真下載可由輸出點算、PI5 啟動明給 `autoInstall: false`、PI6 站點全集與無 `autoInstall: true`與 `await`、PI7 逾時失敗於同行程內記憶);`test/unit-wpwWiring.test.mjs` W4(`setupE2e` 之兩個 `before`:取得先於建置、`this.timeout(PW_INSTALL_BUDGET_MS + 60000)` 在 `await ensureE2eBrowser()` 之前、取得之時限不短於預算加 60 秒、建置仍 180000、取得未併入建置).變異 16 項(記憶移除、失敗亦記憶、不給 timeout、啟動改回 `true`、預算縮為 170000、funLog 判斷式失效、標題帶終端機控制碼、取得 before 時限縮為 180000、併入建置 before、before 內不呼叫取得、before 順序對調、漏 `await`、時限設在 `await` 之後、呼叫被註解掉、逾時失敗不記憶、失敗不印診斷)皆轉紅.作法與錨點見交付時之變異腳本(結案即清,可依上列自行重做).
+
+## 測試清單(由 R1–R14、R16–R18 衍生)
 
 主機:正式模式 `127.0.0.1`,開發模式 `localhost`(標 dev 者).
 
@@ -199,10 +215,19 @@
 | unit-pwOnly | PO1 | 無直接匯入 | `src`、`test`、`toolg` 命中 0 | R17 規則 1 |
 | unit-pwOnly | PO2 | package.json 宣告 | 四種依賴類別皆無 `playwright`／`playwright-core`;`devDependencies['w-playwright']` 為 `^1.0.1` 且不在 `dependencies`;實裝版本主版 1 且不低於 1.0.1 | R17 規則 1、4 |
 | unit-pwOnly | PO3 | 啟動點全集 | `wpw.launchChromium(`／`launchChromiumPersistent(` 只在 `test/tools/e2eLib.mjs` 一處;無舊啟動路徑之深層匯入;無 `chromium.launch(` 等直接啟動 | R17 規則 2 |
-| unit-pwOnly | PO4 | 單一出口寫法 | `e2eLib` 為 `wpw.launchChromium({ ...opt, autoInstall: true })`;`e2eHelpers` 經 `e2eLib` 啟動且只呼叫一次 | R17 規則 2 |
+| unit-pwOnly | PO4 | 單一出口寫法 | `e2eLib` 為 `wpw.launchChromium({ ...opt, autoInstall: false })`;`e2eHelpers` 經 `e2eLib` 啟動且只呼叫一次 | R17 規則 2、R18 規則 3 |
 | unit-wpwWiring | W1 | `setupE2e` 的 `beforeEach` 經 w-playwright | 替身被呼叫 1 次、`env.browser` 為替身回傳者;選項無通道與執行檔、`headless:true`;`args` 恰一個 `--disable-features` 且為最後元素,含守門與 Playwright 預設功能;`ignoreDefaultArgs` 去掉預設那一串;`autoInstall` 不轉傳給 Playwright | R17 規則 2、3 |
 | unit-wpwWiring | W2 | 出口原樣傳入呼叫端選項 | `timeout`、`args`(`--lang=en-US`)保留,呼叫端自給之 `--disable-features=Translate` 併入同一串且仍恰一串 | R17 規則 2 |
 | unit-wpwWiring | W3 | `next()` 真路徑 | 合併後選項真啟動 headless shell,可 `newPage`/`setContent`/讀取,`version()` 有值;替身確被呼叫 1 次 | R17 規則 2、3 |
+| unit-wpwWiring | W4 | `setupE2e` 之取得瀏覽器 `before` | 恰兩個 `before`:第一個(去註解後之原始碼)先 `this.timeout(PW_INSTALL_BUDGET_MS + 60000)` 再 `await ensureE2eBrowser()`(設時限前無 `await`),執行後之 hook 實際時限不短於 `PW_INSTALL_BUDGET_MS + 60000`;第二個(建置)不含取得且時限 180000 | R18 規則 2 |
+| unit-pwInstall | PI0 | 測試接縫自測 | 每個以查詢字串匯入之全新 `e2eLib` 實例記憶獨立,且皆經同一個 `wpw`(替身看得到各實例之呼叫) | R18 |
+| unit-pwInstall | PI1 | 時限取預算 | `ensureChromium` 收到之 `timeout` 即 `PW_INSTALL_BUDGET_MS`(不缺、不另寫字面);預算 ≥ 600000;不改預設種類 | R18 規則 1、4 |
+| unit-pwInstall | PI2 | 同行程只取一次 | 5 個並行呼叫共用同一 Promise、只觸發 1 次 `ensureChromium`;完成後再呼叫不重做 | R18 規則 1 |
+| unit-pwInstall | PI3 | 非逾時失敗不記憶 | 失敗原錯誤(含 `code`)原樣 reject 並印一行含 `code` 與安裝子行程輸出尾段之診斷;下次呼叫重試;成功後不再重做 | R18 規則 1 |
+| unit-pwInstall | PI7 | 逾時失敗於同行程內記憶 | 逾時(`E_INSTALL`、訊息含 `timed out`)後連續 3 次呼叫皆以同一錯誤 reject,`ensureChromium` 只被呼叫 1 次 | R18 規則 1 |
+| unit-pwInstall | PI4 | 真下載可由輸出點算 | `install-output` 內每個 `Downloading … from` 計一項並印一行(不印網址),進度行與其他標籤不計;完成行含項數 | R18 規則 5 |
+| unit-pwInstall | PI5 | 啟動不安裝 | `launchChromium` 傳給 `wpw.launchChromium` 之選項 `autoInstall` 恆為 `false`(呼叫端給 `true` 亦被覆蓋),其餘選項原樣 | R18 規則 3 |
+| unit-pwInstall | PI6 | 站點全集(靜態) | `wpw.ensureChromium(` 只在 `e2eLib`;`src`、`test`、`toolg` 無 `autoInstall: true`(自身樣本除外);直接 `await launchChromium(` 之測試檔皆經 `setupE2e`;`e2eHelpers` 去註解後恰一處 `ensureE2eBrowser(` 且為 `await` | R18 規則 1、3 |
 | (刻意不測) | — | login 內 `invalid site` | 只在竄改 `window[keyGlobal].site` 時可達 | — |
 
 ## e2e 落地映射(對應全域技能 role-coder-for-test-e2e §3)
@@ -215,15 +240,15 @@
 | 前端 | 無;fixture 使用端頁 `test/pages/app.html` 只載建出之 UMD(等同 README 之 UMD 用法),由網址 hash 傳入案例設定 |
 | 建置 | 各檔 `before` 以 `test/tools/buildUmd.mjs` 把 `src`、`toolg`、`package.json` 複製到 `test/_tmp/<檔名>/build/`,spawn 指定 cwd 執行副本之 `toolg/gDistRollup.mjs`(UMD 在副本之 `dist/`),`after` 刪除 |
 | e2e 執行 | `npm test`;單檔 `npx mocha test/e2e-login.test.mjs --timeout 180000` |
-| 共用實作 | `w-package-tools-e2e` ^1.0.32(devDependency)之 `registerCleanupHooks`、`pollUntil`,與 `w-playwright` ^1.0.1(devDependency)之 `launchChromium`,皆經 `test/tools/e2eLib.mjs` 單一橋接(瀏覽器啟動一律經 w-playwright,見 R17) |
-| 改動範圍 → 測試檔 | `src/` 改動:全部 `e2e-*`、`api-*`、`unit-*`;`test/tools/e2eLib.mjs`、`e2eHelpers.mjs` 改動:全部 `e2e-*` 與 `unit-wpwWiring`、`unit-pwOnly`;`package.json` 依賴改動:`unit-imports`、`unit-pwOnly`;`toolg/` 或 `README.md` 改動:`unit-build`、`unit-docs`;全套約 1–2 分鐘,改到共用基礎時直接跑全套 |
+| 共用實作 | `w-package-tools-e2e` ^1.0.32(devDependency)之 `registerCleanupHooks`、`pollUntil`,與 `w-playwright` ^1.0.1(devDependency)之 `launchChromium`、`ensureChromium`,皆經 `test/tools/e2eLib.mjs` 單一橋接(瀏覽器啟動一律經 w-playwright,見 R17;首次取得見 R18) |
+| 改動範圍 → 測試檔 | `src/` 改動:全部 `e2e-*`、`api-*`、`unit-*`;`test/tools/e2eLib.mjs`、`e2eHelpers.mjs` 改動:全部 `e2e-*` 與 `unit-wpwWiring`、`unit-pwOnly`、`unit-pwInstall`;`package.json` 依賴改動:`unit-imports`、`unit-pwOnly`;`toolg/` 或 `README.md` 改動:`unit-build`、`unit-docs`;全套約 1–2 分鐘,改到共用基礎時直接跑全套 |
 | 修前紅之驗證 | 測試工具讀環境變數 `WUL_FDSRC`(預設 `./src`)決定建置與掃描之 src 目錄;修前副本以 `git show HEAD:src/WUiLoginout.mjs` 取至 `./tmp/` 後指向之 |
 
 ### 契約映射
 
 | 契約 | 本專案 | 偏離與依據 |
 |---|---|---|
-| C1 launch wrapper | `test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: true })` 單一出口(經 w-playwright,R17);呼叫端只給 `{ headless:true }` | 無截圖,不需確定性渲染旗標(故不用 `launchBrowser`);w-playwright 另於每次啟動加入守門參數 |
+| C1 launch wrapper | `test/tools/e2eLib.mjs` 之 `launchChromium(opt)` = `wpw.launchChromium({ ...opt, autoInstall: false })` 單一出口(經 w-playwright,R17;啟動不安裝,首次取得由同檔 `ensureE2eBrowser()` 於 `setupE2e` 之獨立 `before` 集中完成,R18);呼叫端只給 `{ headless:true }` | 無截圖,不需確定性渲染旗標(故不用 `launchBrowser`);w-playwright 另於每次啟動加入守門參數 |
 | C2 server lifecycle | 每檔 `before` 起假伺服器(`listen(0)` 作業系統配發埠)、`after` 關閉 + `registerCleanupHooks` | 行程內監聽者不用 `reserveE2ePorts`/`createServiceManager`(無子行程服務、無固定埠),規格 E8 允許改由作業系統配發,見 R16 |
 | C3/C4/C5 | 不適用 | 無設定檔、無 DB、無登入態與語系 |
 | C6–C9 截圖、紅框、遮罩、比對 | 不適用 | 本套件為純 API,無產品畫面;fixture 頁為測試鷹架,不設標準圖 |

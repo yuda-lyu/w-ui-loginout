@@ -1,13 +1,13 @@
 import assert from 'assert'
 import wpw from 'w-playwright'
 import { setupE2e } from './tools/e2eHelpers.mjs'
-import { launchChromium } from './tools/e2eLib.mjs'
+import { PW_INSTALL_BUDGET_MS, launchChromium } from './tools/e2eLib.mjs'
 
 
 //unit-wpwWiring: 本套件測試之瀏覽器啟動點經w-playwright(規則帳本R17; 對應w-playwright帳本R-PW-WIRING)
 //以wpw.setBrowserTypeForTest之替身收啟動選項: 斷言替身確被呼叫(依賴樹有兩份w-playwright時替身只作用於測試所引用之一份, 未斷言即可能空過)、
 //選項含守門(args恰一個--disable-features且為最後一個元素、含AutofillAiWalletPrivatePasses)、只啟動無頭(headless shell), 不啟動真Chrome、Edge或完整Chromium
-//W1、W2為替身(不啟動瀏覽器); W3以next()走真路徑(真啟動headless shell一次, 不觸發登入嘗試)
+//W1、W2為替身(不啟動瀏覽器); W3以next()走真路徑(真啟動headless shell一次, 不觸發登入嘗試); W4核對取得瀏覽器之before接線(規則帳本R18)
 describe('unit-wpwWiring', function() {
 
     let seen = []
@@ -100,6 +100,24 @@ describe('unit-wpwWiring', function() {
         finally {
             await b.close()
         }
+    })
+
+    it('W4 setupE2e之取得瀏覽器before獨立於建置before: 排在建置before之前, 時限不短於安裝預算加60秒, 建置before時限仍為180000(安裝不與建置、起伺服器共用180秒)', function() {
+        //R18: 首次安裝(下載數百MB)與建置UMD各有各的時限; 以執行後之hook實際時限(hook內this.timeout所設)與其函式本體核對
+        let hooks = this.test.parent._beforeAll
+        assert.ok(Array.isArray(hooks) && hooks.length === 2, `mocha內部之_beforeAll結構改變或before數量不是2(取得、建置): ${hooks && hooks.length}`)
+        let [hEnsure, hBuild] = hooks
+        //hook本體原始碼(去註解): 先設時限、再await取得; 時限若設在await之後, 計時器已以預設時限起算, 執行後讀到之hook時限仍為預期值而抓不到
+        let strip = (fn) => String(fn).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+        let sEnsure = strip(hEnsure.fn)
+        let iTimeout = sEnsure.search(/this\.timeout\(PW_INSTALL_BUDGET_MS\s*\+\s*60000\)/)
+        let iAwait = sEnsure.search(/\bawait\s+ensureE2eBrowser\(\)/)
+        assert.ok(iTimeout >= 0, `第一個before須以this.timeout(PW_INSTALL_BUDGET_MS + 60000)設時限: ${sEnsure}`)
+        assert.ok(iAwait > iTimeout, `第一個before須於設時限之後await ensureE2eBrowser(): ${sEnsure}`)
+        assert.ok(!/\bawait\b/.test(sEnsure.slice(0, iTimeout)), '設時限之前不得有await')
+        assert.ok(!strip(hBuild.fn).includes('ensureE2eBrowser'), '取得不得併入建置before')
+        assert.ok(hEnsure.timeout() >= PW_INSTALL_BUDGET_MS + 60000, `取得before之時限不足: ${hEnsure.timeout()}`)
+        assert.strictEqual(hBuild.timeout(), 180000)
     })
 
 })

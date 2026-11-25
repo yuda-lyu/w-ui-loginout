@@ -167,12 +167,12 @@ describe('unit-pwOnly', function() {
         assert.deepStrictEqual(directs, [])
     })
 
-    it('PO4 e2eLib之啟動出口原樣傳入呼叫端選項並明給autoInstall: true; e2eHelpers經e2eLib啟動且只有一處', function() {
+    it('PO4 e2eLib之啟動出口原樣傳入呼叫端選項並明給autoInstall: false(啟動不安裝, 取得集中於ensureE2eBrowser, 見unit-pwInstall); e2eHelpers經e2eLib啟動且只有一處', function() {
         let lib = fs.readFileSync('./test/tools/e2eLib.mjs', 'utf8')
-        assert.ok(lib.includes('wpw.launchChromium({ ...opt, autoInstall: true })'))
+        assert.ok(lib.includes('wpw.launchChromium({ ...opt, autoInstall: false })'))
         assert.ok(lib.includes(`import wpw from 'w-playwright'`))
         let h = fs.readFileSync('./test/tools/e2eHelpers.mjs', 'utf8')
-        assert.ok(h.includes(`import { launchChromium, registerCleanupHooks } from './e2eLib.mjs'`))
+        assert.ok(/import \{[^}]*\blaunchChromium\b[^}]*\} from '\.\/e2eLib\.mjs'/.test(h))
         assert.strictEqual(h.match(/\blaunchChromium\(/g).length, 1)
     })
 

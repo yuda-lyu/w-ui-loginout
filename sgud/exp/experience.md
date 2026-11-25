@@ -64,8 +64,24 @@
 - **本套件原本就沒有直接依賴 Playwright**:`package.json` 無 `playwright`／`playwright-core`,啟動點只有 `test/tools/e2eLib.mjs` 一處(深層匯入 `w-package-tools-e2e/src/launchChromium.mjs`,其內直接 `import { chromium } from 'playwright'`);故「移除 playwright」是空操作,實改為加 devDependency `w-playwright` 與換掉橋接檔之匯出.`src`、`dist` 不引用 Playwright,`toolg/gDistRollup.mjs` 之 `external`／`globals` 不必動.
 - **`node_modules/playwright` 仍在是正常的**:`w-package-tools-e2e` 1.0.32 還宣告 `playwright ^1.64.1`(傳遞相依),待其改版移除後才會消失;R-PW-ONLY 只掃本套件原始碼與 `package.json` 宣告,不看 `node_modules`.
 - **本套件只啟動 headless shell**(`headless:true`、未給 `channel`),w-playwright 不讀錯誤次數也不會累計;守門參數照加(`args` 恰一個 `--disable-features`,最後一個元素).設計 §5.2「每檔最多啟動一次」只約束真 Chrome／Edge／完整 Chromium,故不改成同檔共用瀏覽器,維持每案例一個全新瀏覽器.
-- **接線測試用 `setBrowserTypeForTest` 套在 `setupE2e` 的 hooks 上**:`unit-wpwWiring` 在同一 `describe` 內先註冊「安裝替身」的 `beforeEach`、再呼叫 `setupE2e`(其 `beforeEach` 才會啟動瀏覽器),替身即接住真呼叫點而不啟動任何瀏覽器;替身收到的是 w-playwright 合併後的選項(`autoInstall` 等自用鍵已被剝除,所以「`autoInstall: true`」只能以靜態檢查出口原始碼驗,見 PO4).要證真路徑(接縫不用替身)另用 `next()` 轉交真 Playwright 啟動 headless shell 一次(W3).
+- **接線測試用 `setBrowserTypeForTest` 套在 `setupE2e` 的 hooks 上**:`unit-wpwWiring` 在同一 `describe` 內先註冊「安裝替身」的 `beforeEach`、再呼叫 `setupE2e`(其 `beforeEach` 才會啟動瀏覽器),替身即接住真呼叫點而不啟動任何瀏覽器;替身收到的是 w-playwright 合併後的選項(`autoInstall` 等自用鍵已被剝除,所以 `autoInstall` 之值(2026-11-25 起為 `false`,R18)只能以靜態檢查出口原始碼驗(PO4),或如 PI5 暫換 `wpw.launchChromium` 為替身收呼叫端傳入之選項).要證真路徑(接縫不用替身)另用 `next()` 轉交真 Playwright 啟動 headless shell 一次(W3).
 - **掃描型測試的自我命中**:R-PW-ONLY 正則掃到測試檔自身的樣本字串會誤報;樣本一律以 `${q}`、`${d}`、`${b}` 組字,不寫完整的匯入句;舊路徑正則以片段 `join('/')` 組出;PO3 對自身檔另行略過.
 - **修前紅的證法(不啟動修前瀏覽器)**:靜態測試以 `git archive HEAD src test toolg package.json` 解到 `./tmp/pm-uil/base/`,把新測試檔複製進去,以 `quiet-run --cwd` 在該副本執行 mocha(PO2、PO3、PO4 紅、PO0、PO1 綠);動態接線測試以「出口繞過 w-playwright 但不啟動任何瀏覽器」之變異證紅(W1–W3 全紅),不跑修前的直接 Playwright 啟動.
 - **`npm i` 會把 `package-lock.json` 的 `version` 同步成 `package.json` 的版本**(本輪 1.0.48 → 1.0.49,`package.json` 本就是 1.0.49):不是改了 version,是 lock 原本落後一版.
 - **Bash 工具的 heredoc 附加寫檔會被守門擋下**;sgud 文件一律用 Edit／Write.
+
+## 九、首次取得瀏覽器集中、時限對齊安裝預算(2026-11-25,tul632;規則帳本 R18)
+
+- **隱式安裝實際發生在 `beforeEach`,不是 `before`**:`launchChromium` 帶 `autoInstall: true` 時,首次下載落在 `setupE2e` 的 `beforeEach`(每案例啟動瀏覽器),其時限是全域 `--timeout 180000`;`before` 之 `this.timeout(180000)` 只管建置與起伺服器.盤查報告把站點記為 `before`,以此為準.
+- **本機網路快,實際 180 秒不會逾時**(空夾下載約 15 秒,等候者約 17–30 秒),故修前之紅用「同一指令把全域時限按比例縮小」重現:`PLAYWRIGHT_BROWSERS_PATH` 指向空夾,`npx mocha --parallel` 跑四個 e2e 檔 `--timeout 20000`;修前 35 passing／1 failing(`e2e-logout` 之 `"before each" hook` 逾時 20000ms,同檔其餘 10 案未跑),修後同指令 46 passing,且等候者之取得耗時 16.7／22.2／29.3 秒都超過 20 秒而不失敗.這證明機制,不證明 180 秒下必紅;報告須如實寫明.
+- **模擬「尚未安裝」不碰使用者層快取**:`PLAYWRIGHT_BROWSERS_PATH="<絕對路徑,正斜線>/tmp/…/pw-xxx" node quiet-run.mjs … -- npm test`(環境變數於行程啟動前設在呼叫端,quiet-run 與 mocha 子行程繼承;w-playwright 載入時讀取,事後設無效);夾內會出現 `chromium_headless_shell-*`、`ffmpeg-*`、`winldd-*`、`.links`、`__dirlock`.每輪驗收換一個新夾,驗完以不跟進連結之方式確認夾內無目錄連結再刪.
+- **「安裝恰 1 次」是三項產物各 1 次**:Windows 上 `ensureChromium({ kind: 'headless-shell' })` 下載 headless shell、FFmpeg、Winldd 三項;證據為全部 worker 輸出中 `[e2e-browser] … 真下載:` 三行(同一個 pid)加其餘 worker 之完成行真下載 0 項,不是「一行」.
+- **已安裝時 `ensureChromium` 成本約 0.45–0.66 秒**(每個 worker 啟動一個 `cli.js install` 子行程做檢查),可接受,故不另加「目錄已有產物就略過」之捷徑(會與 w-playwright 之判定重複而漂移).
+- **`mocha --parallel` 下記憶是每 worker 一份**:跨行程只靠 Playwright 之安裝鎖;同 worker 內檔案共用 ESM 模組實例,故同 worker 之第二個 e2e 檔直接命中記憶.測試記憶時以查詢字串(`./tools/e2eLib.mjs?pwInstall=N`)匯入全新實例,並暫換 `wpw`(套件單例)上之函式為替身、`finally` 還原,不污染同 worker 之其他檔.
+- **hook 時限須驗「先設再 await」**:mocha 之 hook 計時器於啟動時即以預設時限起算,`this.timeout()` 設在 `await` 之後只重設仍在跑之計時器;執行後讀 `hook.timeout()` 看起來正確,卻已可能逾時.W4 另以去註解之 hook 原始碼核對 `this.timeout` 在 `await ensureE2eBrowser()` 之前(獨立審查者指出,變異 M12–M14 驗證).
+- **逾時失敗須同行程記憶**:不記憶時,同 worker 之 N 個 e2e 檔每檔各等滿預算(最壞 N×15 分鐘);非逾時失敗(離線等)不記憶,下次重試.判斷靠 w-playwright 固定詞彙(`E_INSTALL`＋訊息含 `timed out`),認不出時只是多重試,不會誤記憶.
+- **等候安裝鎖有 Playwright 自己的上限**(20 次指數退避,約 8 分鐘,原始碼註解寫 10 分鐘):預算 15 分鐘不等於等候者能等 15 分鐘;屬已知取捨,不在測試端補重試(離線時立即失敗之路徑會變成空轉 15 分鐘).
+- **Playwright 之 `Downloading` 輸出帶淡色控制碼**:`Downloading <標題>\u001b[2m from <網址>\u001b[22m`,標題未去碼時日誌尾端殘留 `[2m`;去碼之正則用 `new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g')`,寫成含 `\u001b` 之字串或正則字面會觸發 eslint `no-control-regex`.`npm_config_loglevel` 為 `silent`／`error`／`warn` 時 Playwright 不印此行.
+- **行尾不一**:`e2eHelpers.mjs`、sgud、README 為 CRLF,Write 新建之檔為 LF;Edit 會依檔案原行尾寫入.變異腳本之多行錨點須先偵測行尾(`\r\n`)再轉換,否則多行錨點全數落空;Bash 之 `grep -c $'\r'` 在此環境不可信,以 node 讀檔計 `\r\n` 為準.
+- **變異腳本**(單點缺陷 → 跑 `unit-pwInstall`、`unit-pwOnly`、`unit-wpwWiring` → 確認至少一案轉紅,16 項皆擊殺)以 `./tmp/` 備份檔還原並比雜湊,結案即清;錨點不存在或不唯一一律拋錯.
+- **修前紅(新測試對舊工具)**:`git archive HEAD test src toolg package.json` 解到 `./tmp/<案名>/base/`,複製新測試進去,以 `quiet-run --cwd` 跑;修前之 `e2eLib` 無新匯出,`unit-wpwWiring` 於匯入即失敗,故鏡像副本之該檔以字面值取代該匯入,隔離出 W4 自身之紅(PI0–PI7、PO4、W4 皆紅;PO2 因鏡像根無 `node_modules` 而紅,屬假紅).
