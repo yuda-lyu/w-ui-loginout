@@ -1,13 +1,13 @@
 {
   "name": "w-ui-loginout",
-  "version": "1.0.70",
+  "version": "1.0.71",
   "main": "dist/w-ui-loginout.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.78"
+    "wsemi": "^1.9.79"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.31",
-    "w-package-tools-e2e": "^1.0.55",
+    "w-package-tools-e2e": "^1.0.56",
     "w-playwright": "^1.0.6"
   },
   "scripts": {
